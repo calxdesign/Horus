@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <windows.h>
 
 typedef signed char           s8;
 typedef char                  u8;
@@ -9,8 +10,8 @@ typedef unsigned int          u32;
 typedef long long             s64;
 typedef unsigned long long    u64;
 
-const static u32 output_width	= 960;
-const static u32 output_height	= 540;
+const static u32 output_width	= 8;
+const static u32 output_height	= 8;
 const static u32 output_size	= output_width * output_height;
 
 #pragma pack(1)
@@ -60,13 +61,22 @@ int main()
 	info_header.planes = 1;
 	info_header.bits = 24;
 	info_header.compression = 0;
-	info_header.image_size = output_size;
+	info_header.image_size = row_size * output_height;
 	info_header.x_resolution = output_width;
 	info_header.y_resolution = output_height;
 	info_header.colours = 0;
 	info_header.colours_important = 0;
 
-	FILE* file = fopen("C:\\Users\\David Wilson\\Desktop\\bmp", "wb");
+	u8* bitmap_image_data = (u8*) malloc(info_header.image_size);
+
+	u8 components[] = { 0x00, 0x99, 0xff, 0x00};
+
+	for (u16 i = 0; i < info_header.image_size; ++i)
+	{
+		bitmap_image_data[i] = components[i % 3];
+	}
+
+	FILE* file = fopen("C:\\Users\\dave.wilson\\Desktop\\output.bmp", "wb");
 
 	if (!file)
 	{
@@ -74,10 +84,11 @@ int main()
 		return 1;
 	}
 
-	fwrite(&file_header, sizeof(BitmapFileHeader), 1, file);
-	fwrite(&info_header, sizeof(BitmapInfoHeader), 1, file);
+	fwrite(&file_header,		sizeof(BitmapFileHeader),	1, file);
+	fwrite(&info_header,		sizeof(BitmapInfoHeader),	1, file);
+	fwrite(bitmap_image_data,	info_header.image_size,		1, file);
 
 	fclose(file);
 
-	__asm nop
+	printf("");
 }
