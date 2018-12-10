@@ -1,4 +1,5 @@
 ﻿  Horus.cpp
-c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(72): warning C4838: conversion from 'int' to 'u8' requires a narrowing conversion
-c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(72): warning C4309: 'initializing': truncation of constant value
+c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(83): warning C4244: 'initializing': conversion from 'f32' to 'u8', possible loss of data
+c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(84): warning C4244: 'initializing': conversion from 'f32' to 'u8', possible loss of data
+c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(85): warning C4244: 'initializing': conversion from 'f32' to 'u8', possible loss of data
   Horus.vcxproj -> C:\Users\dave.wilson\Documents\Dave\Horus\x64\Debug\Horus.exe

@@ -9,9 +9,11 @@ typedef int                   s32;
 typedef unsigned int          u32;
 typedef long long             s64;
 typedef unsigned long long    u64;
+typedef float				  f32;
+typedef double				  f64;
 
-const static u32 output_width	= 8;
-const static u32 output_height	= 8;
+const static u32 output_width	= 1920;
+const static u32 output_height	= 1080;
 const static u32 output_size	= output_width * output_height;
 
 #pragma pack(1)
@@ -68,12 +70,29 @@ int main()
 	info_header.colours_important = 0;
 
 	u8* bitmap_image_data = (u8*) malloc(info_header.image_size);
+	u32 bitmap_index = 0;
 
-	u8 components[] = { 0x00, 0x99, 0xff, 0x00};
-
-	for (u16 i = 0; i < info_header.image_size; ++i)
+	for (s16 y = 0; y < output_height; y++)
 	{
-		bitmap_image_data[i] = components[i % 3];
+		for (s16 x = 0; x < output_width; x++)
+		{
+			f32 r = (f32) x / (f32) output_width;
+			f32 g = (f32) y / (f32) output_height;
+			f32 b = 0.2f;
+
+			u8 red =  (int) 255.99 * r;
+			u8 grn =  (int) 255.99 * g;
+			u8 blu =  (int) 255.99 * b;
+
+			bitmap_image_data[bitmap_index] = blu;
+			bitmap_index++;
+
+			bitmap_image_data[bitmap_index] = grn;
+			bitmap_index++;
+
+			bitmap_image_data[bitmap_index] = red;
+			bitmap_index++;
+		}
 	}
 
 	FILE* file = fopen("C:\\Users\\dave.wilson\\Desktop\\output.bmp", "wb");
