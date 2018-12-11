@@ -71,9 +71,9 @@ vec3 colour(Ray& r)
 	f32		t = 0.5f * (dir.y() + 1.0f);
 	vec3	sky_colour = (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
 
-	vec3 final = sphere(sphere_position, sphere_radius, r) ? sphere_colour : sky_colour;
+	vec3	final = sphere(sphere_position, sphere_radius, r) ? sphere_colour : sky_colour;
 
-	return final;
+	return	final;
 }
 
 int main()
