@@ -1,5 +1,7 @@
 ﻿  Horus.cpp
-c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(83): warning C4244: 'initializing': conversion from 'f32' to 'u8', possible loss of data
-c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(84): warning C4244: 'initializing': conversion from 'f32' to 'u8', possible loss of data
-c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(85): warning C4244: 'initializing': conversion from 'f32' to 'u8', possible loss of data
+c:\users\dave.wilson\documents\dave\horus\horus\src\vec3.h(65): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+c:\users\dave.wilson\documents\dave\horus\horus\src\vec3.h(144): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(127): warning C4244: 'initializing': conversion from 'float' to 'u8', possible loss of data
+c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(128): warning C4244: 'initializing': conversion from 'float' to 'u8', possible loss of data
+c:\users\dave.wilson\documents\dave\horus\horus\src\horus.cpp(129): warning C4244: 'initializing': conversion from 'float' to 'u8', possible loss of data
   Horus.vcxproj -> C:\Users\dave.wilson\Documents\Dave\Horus\x64\Debug\Horus.exe

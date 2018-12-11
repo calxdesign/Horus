@@ -120,6 +120,9 @@
   <ItemGroup>
     <ClCompile Include="src\Horus.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\vec3.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
