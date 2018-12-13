@@ -64,7 +64,6 @@ vec3 point_at_parameter(Ray r, float t)
 	return r.origin + t * r.direction;
 }
 
-
 float sphere(vec3& centre, float radius, Ray r)
 {
 	vec3	oc = r.origin - centre;
@@ -83,7 +82,7 @@ float sphere(vec3& centre, float radius, Ray r)
 	}
 }
 
-vec3 colour(Ray& ray)
+vec3 raytrace(Ray& ray)
 {
 	vec3 sphere_position = vec3(0.0f, 0.0f, -1.0f);
 	f32	 sphere_radius = 0.5f;
@@ -181,7 +180,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 			r.origin = origin;
 			r.direction = bottom_left + u * horizontal + v * vertical;
 
-			vec3 c = colour(r);
+			vec3 c = raytrace(r);
 
 			u8 red = (int) 255.99 * c.r();
 			u8 grn = (int) 255.99 * c.g();
