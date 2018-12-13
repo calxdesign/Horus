@@ -59,7 +59,13 @@ static bool output = false;
 
 const char class_name[] = "Simple Rheytracer";
 
-bool sphere(vec3& centre, float radius, Ray r)
+vec3 point_at_parameter(Ray r, float t)
+{
+	return r.origin + t * r.direction;
+}
+
+
+float sphere(vec3& centre, float radius, Ray r)
 {
 	vec3	oc = r.origin - centre;
 	f32		a = dot(r.direction, r.direction);
@@ -67,23 +73,37 @@ bool sphere(vec3& centre, float radius, Ray r)
 	f32		c = dot(oc, oc) - radius * radius;
 	f32		d = b * b - 4 * a*c;
 
-	return (d > 0);
+	if (d < 0)
+	{
+		return -1.0f;
+	}
+	else
+	{
+		return (-b-sqrt(d)) / (2.0f*a);
+	}
 }
 
-vec3 colour(Ray& r)
+
+vec3 colour(Ray& ray)
 {
+	vec3 sphere_position = vec3(0.0f, 0.0f, -1.0f);
+	f32	 sphere_radius = 0.5f;
 
-	vec3	sphere_colour = vec3(1.0f, 0.0f, 0.0f);
-	vec3	sphere_position = vec3(0.0f, 0.0f, -1.0f);
-	f32		sphere_radius = 0.5f;
+	float t = sphere(sphere_position, sphere_radius, ray);
 
-	vec3	dir = normalize(r.direction);
-	f32		t = 0.5f * (dir.y() + 1.0f);
-	vec3	sky_colour = (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
+	if (t > 0.0f)
+	{
+		vec3 rp = point_at_parameter(ray, t);
+		vec3 normal = normalize(rp - sphere_position);
 
-	vec3	final = sphere(sphere_position, sphere_radius, r) ? sphere_colour : sky_colour;
+		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
+	}
 
-	return	final;
+	vec3 dir = normalize(ray.direction);
+
+	t = 0.5*(dir.y() + 1.0f);
+
+	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
@@ -103,7 +123,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 
 		EndPaint(hwnd, &ps);
 	}
-		break;
+	break;
 	case WM_CLOSE:
 		DestroyWindow(hwnd);
 		break;
@@ -129,7 +149,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	file_header.offset = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader);
 
 	device_context = CreateCompatibleDC(0);
-	bitmap_handle = CreateDIBSection(device_context, (BITMAPINFO*) &file_header, DIB_RGB_COLORS, (void**)&bitmap_image_data, 0, 0);
+	bitmap_handle = CreateDIBSection(device_context, (BITMAPINFO*)&file_header, DIB_RGB_COLORS, (void**)&bitmap_image_data, 0, 0);
 
 	info_header.size = sizeof(BitmapInfoHeader);
 	info_header.width = output_width;
@@ -167,7 +187,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 			u8 red = (int) 255.99 * c.r();
 			u8 grn = (int) 255.99 * c.g();
 			u8 blu = (int) 255.99 * c.b();
-			u8 res = (int) 0;
+			u8 res = (int)0;
 
 			bitmap_image_data[bitmap_index] = blu;
 			bitmap_index++;
@@ -219,7 +239,9 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 	if (!RegisterClassEx(&wc)) return 0;
 
-	hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, class_name, class_name, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, output_width, output_height + 43, NULL, NULL, h_instance, NULL);
+	DWORD dwStyle = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
+
+	hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, class_name, class_name, dwStyle, CW_USEDEFAULT, CW_USEDEFAULT, output_width, output_height + 43, NULL, NULL, h_instance, NULL);
 
 	if (!hwnd) return 0;
 
