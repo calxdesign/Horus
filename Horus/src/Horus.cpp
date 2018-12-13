@@ -83,7 +83,6 @@ float sphere(vec3& centre, float radius, Ray r)
 	}
 }
 
-
 vec3 colour(Ray& ray)
 {
 	vec3 sphere_position = vec3(0.0f, 0.0f, -1.0f);
