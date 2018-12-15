@@ -45,10 +45,18 @@ struct Ray
 	vec3 direction;
 };
 
+struct Sphere
+{
+	vec3 position;
+	f32  radius;
+};
+
 const static u32 output_width = 1001;
 const static u32 output_height = 500;
 const static u32 output_size = output_width * output_height;
+const static u8	 num_spheres = 10;
 
+static Sphere* spheres;
 static u8* bitmap_image_data;
 static HBITMAP bitmap_handle;
 static HDC device_context;
@@ -62,6 +70,21 @@ const char class_name[] = "Simple Rheytracer";
 vec3 point_at_parameter(Ray r, float t)
 {
 	return r.origin + t * r.direction;
+}
+
+void save_file()
+{
+	if (!output) return;
+
+	FILE* file = fopen("D:\\Root\\Horus\\Renders\\output.bmp", "wb");
+
+	if (!file) return;
+
+	fwrite(&file_header, sizeof(BitmapFileHeader), 1, file);
+	fwrite(&info_header, sizeof(BitmapInfoHeader), 1, file);
+	fwrite(bitmap_image_data, info_header.image_size, 1, file);
+
+	fclose(file);
 }
 
 float sphere(vec3& centre, float radius, Ray r)
@@ -84,15 +107,26 @@ float sphere(vec3& centre, float radius, Ray r)
 
 vec3 raytrace(Ray& ray)
 {
-	vec3 sphere_position = vec3(0.0f, 0.0f, -1.0f);
-	f32	 sphere_radius = 0.5f;
+	float closest_distance = 100000000.0f;
+	s8	closest_index = 0;
 
-	float t = sphere(sphere_position, sphere_radius, ray);
+	for (s8 i = 0; i < num_spheres; i++)
+	{
+		vec3 d = ray.origin - spheres[i].position;
+		
+		if (d.length() < closest_distance)
+		{
+			closest_distance = d.length();
+			closest_index = i;
+		}
+	}
+
+	float t = sphere(spheres[closest_index].position, spheres[closest_index].radius, ray);
 
 	if (t > 0.0f)
 	{
 		vec3 rp = point_at_parameter(ray, t);
-		vec3 normal = normalize(rp - sphere_position);
+		vec3 normal = normalize(rp - spheres[closest_index].position);
 
 		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
 	}
@@ -135,7 +169,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	return 0;
 }
 
-int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
+void setup_scene()
+{
+	spheres = (Sphere*) malloc(num_spheres * sizeof(Sphere));
+
+	for (s8 i = 0; i < num_spheres; i++)
+	{
+		spheres[i].position = vec3(-5.0f + (u32) i, 0.0f, -2.0f);
+		spheres[i].radius = 0.25f;
+	}
+}
+
+void setup_bitmap()
 {
 	u32 remainder = output_width % 5;
 	u32 row_size = (remainder == 0) ? (output_width * 4) : ((output_width + 4 - remainder) * 4);
@@ -162,6 +207,10 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	info_header.colours_important = 0;
 
 	bitmap_image_data = (u8*)malloc(info_header.image_size);
+}
+
+void render()
+{
 	u32 bitmap_index = 0;
 
 	vec3 bottom_left(-2.0f, -1.0f, -1.0f);
@@ -200,23 +249,14 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 			bitmap_index++;
 		}
 	}
+}
 
-	if (output)
-	{
-		FILE* file = fopen("D:\\Root\\Horus\\Renders\\output.bmp", "wb");
-
-		if (!file)
-		{
-			printf("Unable to open file!");
-			return false;
-		}
-
-		fwrite(&file_header, sizeof(BitmapFileHeader), 1, file);
-		fwrite(&info_header, sizeof(BitmapInfoHeader), 1, file);
-		fwrite(bitmap_image_data, info_header.image_size, 1, file);
-
-		fclose(file);
-	}
+int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
+{
+	setup_scene();
+	setup_bitmap();
+	render();
+	save_file();
 
 	WNDCLASSEX wc;
 	HWND hwnd;
