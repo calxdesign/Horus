@@ -67,10 +67,16 @@ static bool output = false;
 
 const char class_name[] = "Simple Rheytracer";
 
+
+
+
 vec3 point_at_parameter(Ray r, float t)
 {
 	return r.origin + t * r.direction;
 }
+
+
+
 
 void save_file()
 {
@@ -87,7 +93,10 @@ void save_file()
 	fclose(file);
 }
 
-float sphere(vec3& centre, float radius, Ray r)
+
+
+
+f32 sphere(vec3& centre, float radius, Ray r)
 {
 	vec3	oc = r.origin - centre;
 	f32		a = dot(r.direction, r.direction);
@@ -95,48 +104,70 @@ float sphere(vec3& centre, float radius, Ray r)
 	f32		c = dot(oc, oc) - radius * radius;
 	f32		d = b * b - 4 * a*c;
 
-	if (d < 0)
-	{
-		return -1.0f;
-	}
-	else
-	{
-		return (-b-sqrt(d)) / (2.0f*a);
-	}
+	if (d < 0) return -1.0f;
+	else return (-b - sqrt(d)) / (2.0f * a);
 }
+
+
 
 vec3 raytrace(Ray& ray)
 {
-	float closest_distance = 100000000.0f;
-	s8	closest_index = 0;
+	u8	num_hit = 0;
+	u8  hit_indices[num_spheres];
+	f32 t_values[num_spheres];
 
 	for (s8 i = 0; i < num_spheres; i++)
 	{
-		vec3 d = ray.origin - spheres[i].position;
-		
-		if (d.length() < closest_distance)
+		f32 t = sphere(spheres[i].position, spheres[i].radius, ray);
+
+		if (t > 0.0f)
 		{
-			closest_distance = d.length();
-			closest_index = i;
+			hit_indices[num_hit] = i;
+			t_values[num_hit] = t;
+			num_hit++;
 		}
 	}
 
-	float t = sphere(spheres[closest_index].position, spheres[closest_index].radius, ray);
-
-	if (t > 0.0f)
+	if (false) //balls
 	{
-		vec3 rp = point_at_parameter(ray, t);
+		f32 closest_distance = FLT_MAX;
+		s8	closest_index = 0;
+
+		for (s8 i = 0; i < num_hit; i++)
+		{
+			u8 hit_index = hit_indices[i];
+
+			vec3 d = ray.origin - spheres[hit_index].position;
+
+			if (d.length() < closest_distance)
+			{
+				closest_distance = d.length();
+				closest_index = hit_index;
+			}
+		}
+
+		vec3 rp = point_at_parameter(ray, t_values[closest_index]);
 		vec3 normal = normalize(rp - spheres[closest_index].position);
+
+		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
+	} 
+	else
+	{
+		vec3 rp = point_at_parameter(ray, t_values[0]);
+		vec3 normal = normalize(rp - spheres[hit_indices[0]].position);
 
 		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
 	}
 
 	vec3 dir = normalize(ray.direction);
 
-	t = 0.5*(dir.y() + 1.0f);
+//	t = 0.5*(dir.y() + 1.0f);
 
-	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
+	return vec3(1.0f, 1.0f, 1.0f);
 }
+
+
+
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 {
@@ -169,6 +200,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	return 0;
 }
 
+
+
+
 void setup_scene()
 {
 	spheres = (Sphere*) malloc(num_spheres * sizeof(Sphere));
@@ -176,9 +210,12 @@ void setup_scene()
 	for (s8 i = 0; i < num_spheres; i++)
 	{
 		spheres[i].position = vec3(-5.0f + (u32) i, 0.0f, -2.0f);
-		spheres[i].radius = 0.25f;
+		spheres[i].radius = 0.5f;
 	}
 }
+
+
+
 
 void setup_bitmap()
 {
@@ -206,8 +243,11 @@ void setup_bitmap()
 	info_header.colours = 0;
 	info_header.colours_important = 0;
 
-	bitmap_image_data = (u8*)malloc(info_header.image_size);
+	bitmap_image_data = (u8*) malloc(info_header.image_size);
 }
+
+
+
 
 void render()
 {
@@ -250,6 +290,9 @@ void render()
 		}
 	}
 }
+
+
+
 
 int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
