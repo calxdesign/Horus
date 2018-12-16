@@ -115,10 +115,11 @@ vec3 raytrace(Ray& ray)
 	u8	num_hit = 0;
 	u8  hit_indices[num_spheres];
 	f32 t_values[num_spheres];
+	f32 t = -1.0f;
 
 	for (s8 i = 0; i < num_spheres; i++)
 	{
-		f32 t = sphere(spheres[i].position, spheres[i].radius, ray);
+		t = sphere(spheres[i].position, spheres[i].radius, ray);
 
 		if (t > 0.0f)
 		{
@@ -128,9 +129,9 @@ vec3 raytrace(Ray& ray)
 		}
 	}
 
-	if (false) //balls
+	if (num_hit > 1) 
 	{
-		f32 closest_distance = FLT_MAX;
+		f32 closest_t = FLT_MAX;
 		s8	closest_index = 0;
 
 		for (s8 i = 0; i < num_hit; i++)
@@ -139,19 +140,19 @@ vec3 raytrace(Ray& ray)
 
 			vec3 d = ray.origin - spheres[hit_index].position;
 
-			if (d.length() < closest_distance)
+			if (t_values[i] < closest_t)
 			{
-				closest_distance = d.length();
+				closest_t = t_values[i];
 				closest_index = hit_index;
 			}
 		}
 
-		vec3 rp = point_at_parameter(ray, t_values[closest_index]);
+		vec3 rp = point_at_parameter(ray, closest_t);
 		vec3 normal = normalize(rp - spheres[closest_index].position);
 
 		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
 	} 
-	else
+	else if (num_hit == 1)
 	{
 		vec3 rp = point_at_parameter(ray, t_values[0]);
 		vec3 normal = normalize(rp - spheres[hit_indices[0]].position);
@@ -161,9 +162,9 @@ vec3 raytrace(Ray& ray)
 
 	vec3 dir = normalize(ray.direction);
 
-//	t = 0.5*(dir.y() + 1.0f);
+	t = 0.5*(dir.y() + 1.0f);
 
-	return vec3(1.0f, 1.0f, 1.0f);
+	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
 }
 
 
