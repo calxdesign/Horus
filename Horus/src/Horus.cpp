@@ -63,6 +63,8 @@ const static u32		output_height = 500;
 const static u32		output_aa_samples = 8;
 const static u32		output_size = output_width * output_height;
 const static u8			num_spheres = 10;
+const static u8			ssx_samples = 4;
+const static u8			ssy_samples = 4;
 
 static HWND				hwnd;
 static Sphere*			spheres;
@@ -282,17 +284,23 @@ void render()
 		{
 			vec3 col = vec3(0.0f, 0.0f, 0.0f);
 
-			for (s16 s = 0; s < output_aa_samples; s++)
+			f32 x_inc = 1.0f / ssx_samples;
+			f32 y_inc = 1.0f / ssy_samples;
+
+			for (s16 ssy = 0; ssy < ssy_samples; ssy++)
 			{
-				f32 u = (f32)(x + hash((f32)x*x-s)) / (f32) output_width;
-				f32 v = (f32)(y + hash((f32)y*y+s)) / (f32) output_height;
+				for (s16 ssx = 0; ssx < ssx_samples; ssx++)
+				{
+					f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
+					f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
 
-				Ray r = get_ray(camera, u, v);
+					Ray r = get_ray(camera, u, v);
 
-				col += raytrace(r);
+					col += raytrace(r);
+				}
 			}
 
-			col /= (f32) output_aa_samples;
+			col /= (f32) (ssx_samples * ssy_samples);
 
 			u8 red = (int) 255.99 * col.r();
 			u8 grn = (int) 255.99 * col.g();
