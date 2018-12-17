@@ -58,50 +58,40 @@ struct Camera
 	vec3 vertical;
 };
 
-const static u32 output_width = 1001;
-const static u32 output_height = 500;
-const static u32 output_aa_samples = 8;
-const static u32 output_size = output_width * output_height;
-const static u8	 num_spheres = 10;
+const static u32		output_width = 1000;
+const static u32		output_height = 500;
+const static u32		output_aa_samples = 8;
+const static u32		output_size = output_width * output_height;
+const static u8			num_spheres = 10;
 
-static Sphere* spheres;
-static u8* bitmap_image_data;
-static HBITMAP bitmap_handle;
-static HDC device_context;
-static BITMAPINFO bitmapinfo;
+static HWND				hwnd;
+static Sphere*			spheres;
+static u8*				bitmap_image_data;
+static HBITMAP			bitmap_handle;
+static HDC				device_context;
+static BITMAPINFO		bitmapinfo;
 static BitmapFileHeader file_header;
 static BitmapInfoHeader info_header;
-static Camera camera;
-
-static bool output = true;
+static Camera			camera;
+static bool				output = false;
+static bool				rendering = false;
 
 const char class_name[] = "Simple Rheytracer";
-
-
 
 f32 fract(f32 x)
 {
 	return x - (s64)x;
 }
 
-
-
-
 f32 hash(f32 x)
 {
 	return abs(fract(sin(x) * 43758.5453));
 }
 
-
-
-
 vec3 point_at_parameter(Ray r, float t)
 {
 	return r.origin + t * r.direction;
 }
-
-
-
 
 Ray get_ray(Camera cam, f32 u, f32 v)
 {
@@ -111,9 +101,6 @@ Ray get_ray(Camera cam, f32 u, f32 v)
 
 	return ray;
 }
-
-
-
 
 void save_file()
 {
@@ -130,9 +117,6 @@ void save_file()
 	fclose(file);
 }
 
-
-
-
 f32 sphere(vec3 centre, float radius, Ray r)
 {
 	vec3	oc = r.origin - centre;
@@ -144,8 +128,6 @@ f32 sphere(vec3 centre, float radius, Ray r)
 	if (d < 0) return -1.0f;
 	else return (-b - sqrt(d)) / (2.0f * a);
 }
-
-
 
 vec3 raytrace(Ray ray)
 {
@@ -204,8 +186,19 @@ vec3 raytrace(Ray ray)
 	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
 }
 
+void paint()
+{
+	PAINTSTRUCT ps;
+	HDC dc = BeginPaint(hwnd, &ps);
+	s32 x = ps.rcPaint.left;
+	s32 y = ps.rcPaint.top;
+	s32 w = ps.rcPaint.right - ps.rcPaint.left;
+	s32 h = ps.rcPaint.bottom - ps.rcPaint.top;
 
+	StretchDIBits(dc, x, y, w, h, x, y, w, h, (void*)bitmap_image_data, (BITMAPINFO*)&info_header, DIB_RGB_COLORS, SRCCOPY);
 
+	EndPaint(hwnd, &ps);
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 {
@@ -213,18 +206,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	{
 	case WM_PAINT:
 	{
-		PAINTSTRUCT ps;
-		HDC dc = BeginPaint(hwnd, &ps);
-		s32 x = ps.rcPaint.left;
-		s32 y = ps.rcPaint.top;
-		s32 w = ps.rcPaint.right - ps.rcPaint.left;
-		s32 h = ps.rcPaint.bottom - ps.rcPaint.top;
-
-		StretchDIBits(dc, x, y, w, h, x, y, w, h, (void*)bitmap_image_data, (BITMAPINFO*)&info_header, DIB_RGB_COLORS, SRCCOPY);
-
-		EndPaint(hwnd, &ps);
+		paint();
 	}
-	break;
+	break; 
 	case WM_CLOSE:
 		DestroyWindow(hwnd);
 		break;
@@ -238,9 +222,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	return 0;
 }
 
-
-
-
 void setup_scene()
 {
 	spheres = (Sphere*) malloc(num_spheres * sizeof(Sphere));
@@ -252,7 +233,6 @@ void setup_scene()
 	}
 }
 
-
 void setup_camera()
 {
 	camera.eye = vec3(0.0f, 0.0f, 0.0f);
@@ -260,9 +240,6 @@ void setup_camera()
 	camera.horizontal = vec3(4.0f, 0.0f, 0.0f);
 	camera.vertical = vec3(0.0f, 2.0f, 0.0f);
 }
-
-
-
 
 void setup_bitmap()
 {
@@ -293,11 +270,10 @@ void setup_bitmap()
 	bitmap_image_data = (u8*) malloc(info_header.image_size);
 }
 
-
-
-
 void render()
 {
+	rendering = true;
+
 	u32 bitmap_index = 0;
 
 	for (s16 y = 0; y < output_height; y++)
@@ -309,15 +285,12 @@ void render()
 			for (s16 s = 0; s < output_aa_samples; s++)
 			{
 				f32 u = (f32)(x + hash((f32)x*x-s)) / (f32) output_width;
-
-
 				f32 v = (f32)(y + hash((f32)y*y+s)) / (f32) output_height;
 
 				Ray r = get_ray(camera, u, v);
 
 				col += raytrace(r);
 			}
-
 
 			col /= (f32) output_aa_samples;
 
@@ -339,20 +312,33 @@ void render()
 			bitmap_index++;
 		}
 	}
+
+	rendering = false;
 }
 
+DWORD WINAPI PaintThread(void* data)
+{
+	while (rendering)
+	{
+		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE);
+		Sleep(30);
+	}
 
+	return 0;
+}
+
+DWORD WINAPI RenderThread(void* data)
+{
+	HANDLE paint_thread = CreateThread(NULL, 0, PaintThread, NULL, 0, NULL);
+
+	render();
+
+	return 0;
+}
 
 int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
-	setup_camera();
-	setup_scene();
-	setup_bitmap();
-	render();
-	save_file();
-
 	WNDCLASSEX wc;
-	HWND hwnd;
 	MSG msg;
 
 	wc.cbSize = sizeof(WNDCLASSEX);
@@ -378,6 +364,14 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 	ShowWindow(hwnd, cmd_show);
 	UpdateWindow(hwnd);
+
+	setup_camera();
+	setup_scene();
+	setup_bitmap();
+
+	HANDLE render_thread = CreateThread(NULL, 0, RenderThread, NULL, 0, NULL);
+	
+	//save_file();
 
 	while (1)
 	{
