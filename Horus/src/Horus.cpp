@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <windows.h>
+#include <stdlib.h>
 #include "vec3.h"
 
 #pragma pack(1)
@@ -61,6 +62,7 @@ struct Camera
 
 const static u32 output_width = 1001;
 const static u32 output_height = 500;
+const static u32 output_aa_samples = 8;
 const static u32 output_size = output_width * output_height;
 const static u8	 num_spheres = 10;
 
@@ -71,9 +73,26 @@ static HDC device_context;
 static BITMAPINFO bitmapinfo;
 static BitmapFileHeader file_header;
 static BitmapInfoHeader info_header;
-static bool output = false;
+static Camera camera;
+
+static bool output = true;
 
 const char class_name[] = "Simple Rheytracer";
+
+
+
+f32 fract(f32 x)
+{
+	return x - (s64)x;
+}
+
+
+
+
+f32 hash(f32 x)
+{
+	return abs(fract(sin(x) * 43758.5453));
+}
 
 
 
@@ -81,6 +100,18 @@ const char class_name[] = "Simple Rheytracer";
 vec3 point_at_parameter(Ray r, float t)
 {
 	return r.origin + t * r.direction;
+}
+
+
+
+
+Ray get_ray(Camera cam, f32 u, f32 v)
+{
+	Ray ray;
+	ray.origin = cam.eye;
+	ray.direction = cam.bottom_left + u * cam.horizontal + v * cam.vertical - cam.eye;
+
+	return ray;
 }
 
 
@@ -224,6 +255,15 @@ void setup_scene()
 }
 
 
+void setup_camera()
+{
+	camera.eye = vec3(0.0f, 0.0f, 0.0f);
+	camera.bottom_left = vec3(-2.0f, -1.0f, -1.0f);
+	camera.horizontal = vec3(4.0f, 0.0f, 0.0f);
+	camera.vertical = vec3(0.0f, 2.0f, 0.0f);
+}
+
+
 
 
 void setup_bitmap()
@@ -262,28 +302,31 @@ void render()
 {
 	u32 bitmap_index = 0;
 
-	vec3 bottom_left(-2.0f, -1.0f, -1.0f);
-	vec3 horizontal(4.0f, 0.0f, 0.0f);
-	vec3 vertical(0.0f, 2.0f, 0.0f);
-	vec3 origin(0.0f, 0.0f, 0.0f);
-
 	for (s16 y = 0; y < output_height; y++)
 	{
 		for (s16 x = 0; x < output_width; x++)
 		{
-			f32 u = (f32)x / (f32)output_width;
-			f32 v = (f32)y / (f32)output_height;
+			vec3 col = vec3(0.0f, 0.0f, 0.0f);
 
-			Ray r;
-			r.origin = origin;
-			r.direction = bottom_left + u * horizontal + v * vertical;
+			for (s16 s = 0; s < output_aa_samples; s++)
+			{
+				f32 u = (f32)(x + hash((f32)x*x-s)) / (f32) output_width;
 
-			vec3 c = raytrace(r);
 
-			u8 red = (int) 255.99 * c.r();
-			u8 grn = (int) 255.99 * c.g();
-			u8 blu = (int) 255.99 * c.b();
-			u8 res = (int)0;
+				f32 v = (f32)(y + hash((f32)y*y+s)) / (f32) output_height;
+
+				Ray r = get_ray(camera, u, v);
+
+				col += raytrace(r);
+			}
+
+
+			col /= (f32) output_aa_samples;
+
+			u8 red = (int) 255.99 * col.r();
+			u8 grn = (int) 255.99 * col.g();
+			u8 blu = (int) 255.99 * col.b();
+			u8 res = (int) 0;
 
 			bitmap_image_data[bitmap_index] = blu;
 			bitmap_index++;
@@ -302,9 +345,9 @@ void render()
 
 
 
-
 int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
+	setup_camera();
 	setup_scene();
 	setup_bitmap();
 	render();
