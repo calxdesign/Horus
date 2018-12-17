@@ -58,8 +58,8 @@ struct Camera
 	vec3 vertical;
 };
 
-const static u32		output_width = 1000;
-const static u32		output_height = 500;
+const static u32		output_width = 1024;
+const static u32		output_height = 512;
 const static u32		output_aa_samples = 8;
 const static u32		output_size = output_width * output_height;
 const static u8			num_spheres = 10;
@@ -75,7 +75,7 @@ static BITMAPINFO		bitmapinfo;
 static BitmapFileHeader file_header;
 static BitmapInfoHeader info_header;
 static Camera			camera;
-static bool				output = false;
+static bool				output = true;
 static bool				rendering = false;
 
 const char class_name[] = "Simple Rheytracer";
@@ -186,6 +186,7 @@ vec3 raytrace(Ray ray)
 	t = 0.5*(dir.y() + 1.0f);
 
 	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
+	//return vec3(0.0f, 0.0f, 0.0f);
 }
 
 void paint()
@@ -212,6 +213,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	}
 	break; 
 	case WM_CLOSE:
+		save_file();
 		DestroyWindow(hwnd);
 		break;
 	case WM_DESTROY:
@@ -255,7 +257,7 @@ void setup_bitmap()
 	file_header.offset = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader);
 
 	device_context = CreateCompatibleDC(0);
-	bitmap_handle = CreateDIBSection(device_context, (BITMAPINFO*)&file_header, DIB_RGB_COLORS, (void**)&bitmap_image_data, 0, 0);
+	bitmap_handle = CreateDIBSection(device_context, (BITMAPINFO*)&file_header, DIB_RGB_COLORS, (void**) &bitmap_image_data, 0, 0);
 
 	info_header.size = sizeof(BitmapInfoHeader);
 	info_header.width = output_width;
@@ -269,64 +271,58 @@ void setup_bitmap()
 	info_header.colours = 0;
 	info_header.colours_important = 0;
 
-	bitmap_image_data = (u8*) malloc(info_header.image_size);
+	bitmap_image_data = (u8*)_aligned_malloc(info_header.image_size, 64);
 }
 
-void render()
+void render_pixel(u32 x, u32 y)
 {
-	rendering = true;
+	vec3 col = vec3(0.0f, 0.0f, 0.0f);
 
-	u32 bitmap_index = 0;
+	f32 x_inc = 1.0f / ssx_samples;
+	f32 y_inc = 1.0f / ssy_samples;
 
-	for (s16 y = 0; y < output_height; y++)
+	for (s16 ssy = 0; ssy < ssy_samples; ssy++)
 	{
-		for (s16 x = 0; x < output_width; x++)
+		for (s16 ssx = 0; ssx < ssx_samples; ssx++)
 		{
-			vec3 col = vec3(0.0f, 0.0f, 0.0f);
+			f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
+			f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
 
-			f32 x_inc = 1.0f / ssx_samples;
-			f32 y_inc = 1.0f / ssy_samples;
+			Ray r = get_ray(camera, u, v);
 
-			for (s16 ssy = 0; ssy < ssy_samples; ssy++)
-			{
-				for (s16 ssx = 0; ssx < ssx_samples; ssx++)
-				{
-					f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
-					f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
-
-					Ray r = get_ray(camera, u, v);
-
-					col += raytrace(r);
-				}
-			}
-
-			col /= (f32) (ssx_samples * ssy_samples);
-
-			u8 red = (int) 255.99 * col.r();
-			u8 grn = (int) 255.99 * col.g();
-			u8 blu = (int) 255.99 * col.b();
-			u8 res = (int) 0;
-
-			bitmap_image_data[bitmap_index] = blu;
-			bitmap_index++;
-
-			bitmap_image_data[bitmap_index] = grn;
-			bitmap_index++;
-
-			bitmap_image_data[bitmap_index] = red;
-			bitmap_index++;
-
-			bitmap_image_data[bitmap_index] = res;
-			bitmap_index++;
+			col += raytrace(r);
 		}
 	}
 
-	rendering = false;
+	col /= (f32)(ssx_samples * ssy_samples);
+
+	u8 red = (int) 255.99 * col.r();
+	u8 grn = (int) 255.99 * col.g();
+	u8 blu = (int) 255.99 * col.b();
+	u8 res = (int) 0;
+
+	int bitmap_index = ((y * output_width) + x) * 4;
+
+	bitmap_image_data[bitmap_index+0] = blu;
+	bitmap_image_data[bitmap_index+1] = grn;
+	bitmap_image_data[bitmap_index+2] = red;
+	bitmap_image_data[bitmap_index+3] = res;
+}
+
+void render(u8 offset)
+{
+	for (s16 y = offset; y < output_height; y += 8)
+	{
+		for (s16 x = 0; x < output_width; x ++)
+		{
+			render_pixel(x, y);
+		}
+	}
 }
 
 DWORD WINAPI PaintThread(void* data)
 {
-	while (rendering)
+	while (true)
 	{
 		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE);
 		Sleep(30);
@@ -337,12 +333,17 @@ DWORD WINAPI PaintThread(void* data)
 
 DWORD WINAPI RenderThread(void* data)
 {
-	HANDLE paint_thread = CreateThread(NULL, 0, PaintThread, NULL, 0, NULL);
+	u8* offset = (u8*) data;
+	u8 deref = *offset;
 
-	render();
+	CreateThread(NULL, 0, PaintThread, NULL, 0, NULL);
+
+	render(deref);
 
 	return 0;
 }
+
+u8 thread_ids[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
 int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
@@ -376,10 +377,23 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	setup_camera();
 	setup_scene();
 	setup_bitmap();
-
-	HANDLE render_thread = CreateThread(NULL, 0, RenderThread, NULL, 0, NULL);
 	
-	//save_file();
+	u8 thread_0 = 0;
+	CreateThread(NULL, 0, RenderThread, &thread_0, 0, NULL);
+	u8 thread_1 = 1;
+	CreateThread(NULL, 0, RenderThread, &thread_1, 0, NULL);
+	u8 thread_2 = 2;
+	CreateThread(NULL, 0, RenderThread, &thread_2, 0, NULL);
+	u8 thread_3 = 3;
+	CreateThread(NULL, 0, RenderThread, &thread_3, 0, NULL);
+	u8 thread_4 = 4;
+	CreateThread(NULL, 0, RenderThread, &thread_4, 0, NULL);
+	u8 thread_5 = 5;
+	CreateThread(NULL, 0, RenderThread, &thread_5, 0, NULL);
+	u8 thread_6 = 6;
+	CreateThread(NULL, 0, RenderThread, &thread_6, 0, NULL);
+	u8 thread_7 = 7;
+	CreateThread(NULL, 0, RenderThread, &thread_7, 0, NULL);
 
 	while (1)
 	{
