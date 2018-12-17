@@ -1,9 +1,0 @@
-﻿  Horus.cpp
-d:\root\horus\horus\src\vec3.h(65): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-d:\root\horus\horus\src\vec3.h(144): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-d:\root\horus\horus\src\horus.cpp(165): warning C4244: '=': conversion from 'double' to 'f32', possible loss of data
-d:\root\horus\horus\src\horus.cpp(275): warning C4244: 'initializing': conversion from 'float' to 'u8', possible loss of data
-d:\root\horus\horus\src\horus.cpp(276): warning C4244: 'initializing': conversion from 'float' to 'u8', possible loss of data
-d:\root\horus\horus\src\horus.cpp(277): warning C4244: 'initializing': conversion from 'float' to 'u8', possible loss of data
-d:\root\horus\horus\src\horus.cpp(341): warning C4244: 'return': conversion from 'WPARAM' to 'int', possible loss of data
-  Horus.vcxproj -> D:\Root\Horus\x64\Debug\Horus.exe

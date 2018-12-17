@@ -51,6 +51,14 @@ struct Sphere
 	f32  radius;
 };
 
+struct Camera
+{
+	vec3 bottom_left;
+	vec3 eye;
+	vec3 horizontal;
+	vec3 vertical;
+};
+
 const static u32 output_width = 1001;
 const static u32 output_height = 500;
 const static u32 output_size = output_width * output_height;
@@ -96,7 +104,7 @@ void save_file()
 
 
 
-f32 sphere(vec3& centre, float radius, Ray r)
+f32 sphere(vec3 centre, float radius, Ray r)
 {
 	vec3	oc = r.origin - centre;
 	f32		a = dot(r.direction, r.direction);
@@ -110,7 +118,7 @@ f32 sphere(vec3& centre, float radius, Ray r)
 
 
 
-vec3 raytrace(Ray& ray)
+vec3 raytrace(Ray ray)
 {
 	u8	num_hit = 0;
 	u8  hit_indices[num_spheres];
