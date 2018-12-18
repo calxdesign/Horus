@@ -63,7 +63,7 @@ const static u32		output_width = 1024;
 const static u32		output_height = 512;
 const static u32		output_aa_samples = 8;
 const static u32		output_size = output_width * output_height;
-const static u8			num_spheres = 10;
+const static u8			num_spheres = 2;
 const static u8			ssx_samples = 4;
 const static u8			ssy_samples = 4;
 
@@ -132,6 +132,22 @@ f32 sphere(vec3 centre, float radius, Ray r)
 	else return (-b - sqrt(d)) / (2.0f * a);
 }
 
+vec3 random_point_within_magnitude(f32 mag)
+{
+	vec3 p;
+
+	do
+	{
+		f64 x = ((f64)rand() / (RAND_MAX));
+		f64 y = ((f64)rand() / (RAND_MAX));
+		f64 z = ((f64)rand() / (RAND_MAX));
+
+		p = 2.0f * vec3(x, y, z) - vec3(1.0f, 1.0f, 1.0f);
+	} while (p.squared_length() >= mag);
+
+	return p;
+}
+
 vec3 raytrace(Ray ray)
 {
 	u8	num_hit = 0;
@@ -170,7 +186,10 @@ vec3 raytrace(Ray ray)
 		}
 
 		vec3 rp = point_at_parameter(ray, closest_t);
+
 		vec3 normal = normalize(rp - spheres[closest_index].position);
+
+		vec3 target = rp + normal + random_point_within_magnitude(1.0);
 
 		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
 	}
@@ -231,11 +250,17 @@ void setup_scene()
 {
 	spheres = (Sphere*)malloc(num_spheres * sizeof(Sphere));
 
-	for (s8 i = 0; i < num_spheres; i++)
-	{
-		spheres[i].position = vec3(-5.0f + (u32)i, 0.0f, -2.0f);
-		spheres[i].radius = 0.5f;
-	}
+	spheres[0].position = vec3(0.0f, 0.0f, -1.0f);
+	spheres[0].radius = 0.5f;
+
+	spheres[1].position = vec3(0.0f, -100.5f, -1.0f);
+	spheres[1].radius = 100.0f;
+
+	//for (s8 i = 0; i < num_spheres; i++)
+	//{
+	//	spheres[i].position = vec3(-5.0f + (u32)i, 0.0f, -2.0f);
+	//	spheres[i].radius = 0.5f;
+	//}
 }
 
 void setup_camera()
