@@ -1,5 +1,6 @@
 #include <windows.h>
 #include "vec3.h"
+#include <time.h>
 
 #pragma pack(1)
 
@@ -150,7 +151,7 @@ vec3 raytrace(Ray ray)
 		}
 	}
 
-	if (num_hit > 1) 
+	if (num_hit > 1)
 	{
 		f32 closest_t = FLT_MAX;
 		s8	closest_index = 0;
@@ -172,7 +173,7 @@ vec3 raytrace(Ray ray)
 		vec3 normal = normalize(rp - spheres[closest_index].position);
 
 		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
-	} 
+	}
 	else if (num_hit == 1)
 	{
 		vec3 rp = point_at_parameter(ray, t_values[0]);
@@ -211,7 +212,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	{
 		paint();
 	}
-	break; 
+	break;
 	case WM_CLOSE:
 		save_file();
 		DestroyWindow(hwnd);
@@ -228,11 +229,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 
 void setup_scene()
 {
-	spheres = (Sphere*) malloc(num_spheres * sizeof(Sphere));
+	spheres = (Sphere*)malloc(num_spheres * sizeof(Sphere));
 
 	for (s8 i = 0; i < num_spheres; i++)
 	{
-		spheres[i].position = vec3(-5.0f + (u32) i, 0.0f, -2.0f);
+		spheres[i].position = vec3(-5.0f + (u32)i, 0.0f, -2.0f);
 		spheres[i].radius = 0.5f;
 	}
 }
@@ -257,7 +258,7 @@ void setup_bitmap()
 	file_header.offset = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader);
 
 	device_context = CreateCompatibleDC(0);
-	bitmap_handle = CreateDIBSection(device_context, (BITMAPINFO*)&file_header, DIB_RGB_COLORS, (void**) &bitmap_image_data, 0, 0);
+	bitmap_handle = CreateDIBSection(device_context, (BITMAPINFO*)&file_header, DIB_RGB_COLORS, (void**)&bitmap_image_data, 0, 0);
 
 	info_header.size = sizeof(BitmapInfoHeader);
 	info_header.width = output_width;
@@ -299,21 +300,21 @@ void render_pixel(u32 x, u32 y)
 	u8 red = (int) 255.99 * col.r();
 	u8 grn = (int) 255.99 * col.g();
 	u8 blu = (int) 255.99 * col.b();
-	u8 res = (int) 0;
+	u8 res = (int)0;
 
 	int bitmap_index = ((y * output_width) + x) * 4;
 
-	bitmap_image_data[bitmap_index+0] = blu;
-	bitmap_image_data[bitmap_index+1] = grn;
-	bitmap_image_data[bitmap_index+2] = red;
-	bitmap_image_data[bitmap_index+3] = res;
+	bitmap_image_data[bitmap_index + 0] = blu;
+	bitmap_image_data[bitmap_index + 1] = grn;
+	bitmap_image_data[bitmap_index + 2] = red;
+	bitmap_image_data[bitmap_index + 3] = res;
 }
 
-void render(u8 offset)
+void render(u16 offset, u16 inc)
 {
-	for (s16 y = offset; y < output_height; y += 8)
+	for (s16 y = offset; y < output_height; y += inc)
 	{
-		for (s16 x = 0; x < output_width; x ++)
+		for (s16 x = 0; x < output_width; x++)
 		{
 			render_pixel(x, y);
 		}
@@ -333,17 +334,15 @@ DWORD WINAPI PaintThread(void* data)
 
 DWORD WINAPI RenderThread(void* data)
 {
-	u8* offset = (u8*) data;
-	u8 deref = *offset;
+	u32* d = (u32*)data;
 
-	CreateThread(NULL, 0, PaintThread, NULL, 0, NULL);
+	u16 offset = (*d >> 16);
+	u16 increment = *d;
 
-	render(deref);
+	render(offset, increment);
 
 	return 0;
 }
-
-u8 thread_ids[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
 int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line, int cmd_show)
 {
@@ -377,26 +376,69 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	setup_camera();
 	setup_scene();
 	setup_bitmap();
-	
-	u8 thread_0 = 0;
-	CreateThread(NULL, 0, RenderThread, &thread_0, 0, NULL);
-	u8 thread_1 = 1;
-	CreateThread(NULL, 0, RenderThread, &thread_1, 0, NULL);
-	u8 thread_2 = 2;
-	CreateThread(NULL, 0, RenderThread, &thread_2, 0, NULL);
-	u8 thread_3 = 3;
-	CreateThread(NULL, 0, RenderThread, &thread_3, 0, NULL);
-	u8 thread_4 = 4;
-	CreateThread(NULL, 0, RenderThread, &thread_4, 0, NULL);
-	u8 thread_5 = 5;
-	CreateThread(NULL, 0, RenderThread, &thread_5, 0, NULL);
-	u8 thread_6 = 6;
-	CreateThread(NULL, 0, RenderThread, &thread_6, 0, NULL);
-	u8 thread_7 = 7;
-	CreateThread(NULL, 0, RenderThread, &thread_7, 0, NULL);
+
+	SYSTEM_INFO system_info;
+	GetSystemInfo(&system_info);
+
+	u16 cpu_count = system_info.dwNumberOfProcessors;
+	u32* render_thread_data = (u32*)malloc(cpu_count * sizeof(u32));
+	HANDLE* render_threads = (HANDLE*)malloc(cpu_count * sizeof(HANDLE));
+	clock_t start, end;
+	f64 cpu_time_used;
+
+	start = clock();
+
+	for (u16 i = 0; i < cpu_count; i++)
+	{
+		render_thread_data[i] = i << 16 | cpu_count;
+		render_threads[i] = CreateThread(NULL, 0, RenderThread, (void*)&render_thread_data[i], 0, NULL);
+		SetThreadAffinityMask(render_threads[i], 1 << i);
+	}
+
+	HANDLE window_thread = CreateThread(NULL, 0, PaintThread, NULL, 0, NULL);
+
+	const u8 RENDER = 0;
+	const u8 IDLE = 1;
+
+	u8 STATE = RENDER;
 
 	while (1)
 	{
+		switch (STATE)
+		{
+		case RENDER:
+		{
+			u32 active_threads = 0;
+
+			for (u32 i = 0; i < cpu_count; i++)
+			{
+				if (WaitForSingleObject(render_threads[i], 0) != WAIT_OBJECT_0) active_threads++;
+			}
+
+			if (active_threads == 0)
+			{
+				end = clock();
+
+				TerminateThread(window_thread, 0);
+
+				cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+				char s[32];
+
+				sprintf(s, "Finished in %f", cpu_time_used);
+
+				MessageBox(NULL, s, "Renderer", MB_ICONEXCLAMATION | MB_OK);
+
+				STATE = IDLE;
+			}
+		}
+		break;
+		case IDLE:
+			break;
+		default:
+			break;
+		}
+
 		if (!GetMessage(&msg, NULL, 0, 0)) return 0;
 
 		TranslateMessage(&msg);
