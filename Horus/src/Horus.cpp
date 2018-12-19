@@ -59,6 +59,13 @@ struct Camera
 	vec3 vertical;
 };
 
+struct Hit
+{
+	f32  t;
+	vec3 p;
+	vec3 n;
+};
+
 const static u32		output_width = 1024;
 const static u32		output_height = 512;
 const static u32		output_aa_samples = 8;
@@ -138,76 +145,149 @@ vec3 random_point_within_magnitude(f32 mag)
 
 	do
 	{
-		f64 x = ((f64)rand() / (RAND_MAX));
-		f64 y = ((f64)rand() / (RAND_MAX));
-		f64 z = ((f64)rand() / (RAND_MAX));
+		f64 x = ((f64) rand() / (RAND_MAX));
+		f64 y = ((f64) rand() / (RAND_MAX));
+		f64 z = ((f64) rand() / (RAND_MAX));
 
 		p = 2.0f * vec3(x, y, z) - vec3(1.0f, 1.0f, 1.0f);
+
 	} while (p.squared_length() >= mag);
 
 	return p;
 }
 
-vec3 raytrace(Ray ray)
+bool intersection(Ray r, Sphere s, Hit* h, float t_min, float t_max)
 {
-	u8	num_hit = 0;
-	u8  hit_indices[num_spheres];
-	f32 t_values[num_spheres];
-	f32 t = -1.0f;
+	vec3	oc = r.origin - s.position;
+	f32		a = dot(r.direction, r.direction);
+	f32		b = 2.0f * dot(oc, r.direction);
+	f32		c = dot(oc, oc) - s.radius * s.radius;
+	f32		d = b * b - 4 * a*c;
 
-	for (s8 i = 0; i < num_spheres; i++)
+	if (d > 0)
 	{
-		t = sphere(spheres[i].position, spheres[i].radius, ray);
+		float temp = (-b - sqrt(b*b - a * c)) / a;
 
-		if (t > 0.0f)
+		if (temp < t_max && temp > t_min)
 		{
-			hit_indices[num_hit] = i;
-			t_values[num_hit] = t;
-			num_hit++;
+			h->t = temp;
+			h->p = point_at_parameter(r, temp);
+			h->n = h->p - s.position / s.radius;
+
+			return true;
+		}
+
+		temp = (-b + sqrt(b*b - a * c)) / a;
+
+		if (temp < t_max && temp > t_min)
+		{
+			h->t = temp;
+			h->p = point_at_parameter(r, temp);
+			h->n = h->p - s.position / s.radius;
+
+			return true;
 		}
 	}
 
-	if (num_hit > 1)
-	{
-		f32 closest_t = FLT_MAX;
-		s8	closest_index = 0;
-
-		for (s8 i = 0; i < num_hit; i++)
-		{
-			u8 hit_index = hit_indices[i];
-
-			vec3 d = ray.origin - spheres[hit_index].position;
-
-			if (t_values[i] < closest_t)
-			{
-				closest_t = t_values[i];
-				closest_index = hit_index;
-			}
-		}
-
-		vec3 rp = point_at_parameter(ray, closest_t);
-
-		vec3 normal = normalize(rp - spheres[closest_index].position);
-
-		vec3 target = rp + normal + random_point_within_magnitude(1.0);
-
-		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
-	}
-	else if (num_hit == 1)
-	{
-		vec3 rp = point_at_parameter(ray, t_values[0]);
-		vec3 normal = normalize(rp - spheres[hit_indices[0]].position);
-
-		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
-	}
-
-	vec3 dir = normalize(ray.direction);
-
-	t = 0.5*(dir.y() + 1.0f);
-
-	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
-	//return vec3(0.0f, 0.0f, 0.0f);
+	return false;
 }
+
+bool intersects_all(Ray r, Hit* h, float t_min, float t_max)
+{
+	Hit temp;
+	bool hit_something = false;
+	u64 closest = t_max;
+
+	for (u32 i = 0; i < num_spheres; i++)
+	{
+		if (intersection(r, spheres[i], &temp, t_min, closest))
+		{
+			hit_something = true;
+			closest = temp.t;
+
+			h->t = temp.t;
+			h->p = temp.p;
+			h->n = temp.n;
+		}
+	}
+
+	return hit_something;
+}
+
+void raytrace(Ray ray)
+{
+
+}
+
+
+
+
+
+
+
+
+
+
+//
+//vec3 raytrace(Ray ray)
+//{
+//	u8	num_hit = 0;
+//	u8  hit_indices[num_spheres];
+//	f32 t_values[num_spheres];
+//	f32 t = -1.0f;
+//
+//	for (s8 i = 0; i < num_spheres; i++)
+//	{
+//		t = sphere(spheres[i].position, spheres[i].radius, ray);
+//
+//		if (t > 0.0f)
+//		{
+//			hit_indices[num_hit] = i;
+//			t_values[num_hit] = t;
+//			num_hit++;
+//		}
+//	}
+//
+//	if (num_hit > 1)
+//	{
+//		f32 closest_t = FLT_MAX;
+//		s8	closest_index = 0;
+//
+//		for (s8 i = 0; i < num_hit; i++)
+//		{
+//			u8 hit_index = hit_indices[i];
+//
+//			vec3 d = ray.origin - spheres[hit_index].position;
+//
+//			if (t_values[i] < closest_t)
+//			{
+//				closest_t = t_values[i];
+//				closest_index = hit_index; 
+//			}
+//		}
+//
+//		vec3 rp = point_at_parameter(ray, closest_t);
+//
+//		vec3 normal = normalize(rp - spheres[closest_index].position);
+//
+//		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
+//	}
+//	else if (num_hit == 1)
+//	{
+//		vec3 rp = point_at_parameter(ray, t_values[0]);
+//		vec3 normal = normalize(rp - spheres[hit_indices[0]].position);
+//
+//		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
+//	}
+//
+//	vec3 dir = normalize(ray.direction);
+//
+//	t = 0.5*(dir.y() + 1.0f);
+//
+//	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
+//
+//	//return vec3(0.0f, 0.0f, 0.0f);
+//}
 
 void paint()
 {
@@ -271,6 +351,33 @@ void setup_camera()
 	camera.vertical = vec3(0.0f, 2.0f, 0.0f);
 }
 
+vec3 colour(Ray r)
+{
+	Hit h;
+
+	if (intersects_all(r, &h, 0.0f, FLT_MAX))
+	{
+		vec3 random_unit_vector = random_point_within_magnitude(1.0f);
+		vec3 target = h.p + h.n + random_unit_vector;
+
+		Ray ray;
+		ray.origin = h.p;
+		ray.direction = target - h.p;
+
+		vec3 col = colour(ray);
+
+		return 0.5f * col;
+	}
+	else
+	{
+		vec3 dir = normalize(r.direction);
+
+		f32 t = 0.5*(dir.y() + 1.0f);
+
+		return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
+	}
+}
+
 void setup_bitmap()
 {
 	u32 remainder = output_width % 5;
@@ -316,7 +423,7 @@ void render_pixel(u32 x, u32 y)
 
 			Ray r = get_ray(camera, u, v);
 
-			col += raytrace(r);
+			col += colour(r);
 		}
 	}
 
