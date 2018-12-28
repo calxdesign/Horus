@@ -59,21 +59,30 @@ struct Camera
 	vec3 vertical;
 };
 
-struct Hit
+struct Material
 {
-	f32  t;
-	vec3 p;
-	vec3 n;
+
 };
 
-const static u32		output_width = 1024;
-const static u32		output_height = 512;
-const static u32		output_aa_samples = 8;
-const static u32		output_size = output_width * output_height;
-const static u8			num_spheres = 2;
-const static u8			ssx_samples = 4;
-const static u8			ssy_samples = 4;
+struct Hit
+{
+	f32			t;
+	vec3		point;
+	vec3		normal;
+	Material*	material;
+};
 
+const static u32		output_width = 400;
+const static u32		output_height = 200;
+const static u32		output_size = output_width * output_height;
+const static u32		num_spheres = 2;
+const static u32		ssx_samples = 4;
+const static u32		ssy_samples = 4;
+const static u32		rnd_samples = 127;
+const static u32		AA_SAMPLESTYLE_GRID = 0;
+const static u32		AA_SAMPLESTYLE_RANDOM = 1;
+
+static u8				aa_samplestyle = AA_SAMPLESTYLE_RANDOM;
 static HWND				hwnd;
 static Sphere*			spheres;
 static u8*				bitmap_image_data;
@@ -85,6 +94,7 @@ static BitmapInfoHeader info_header;
 static Camera			camera;
 static bool				output = true;
 static bool				rendering = false;
+static bool				multithreaded = true;
 
 const char class_name[] = "Simple Rheytracer";
 
@@ -145,9 +155,9 @@ vec3 random_point_within_magnitude(f32 mag)
 
 	do
 	{
-		f64 x = ((f64) rand() / (RAND_MAX));
-		f64 y = ((f64) rand() / (RAND_MAX));
-		f64 z = ((f64) rand() / (RAND_MAX));
+		f64 x = ((f64)rand() / (RAND_MAX));
+		f64 y = ((f64)rand() / (RAND_MAX));
+		f64 z = ((f64)rand() / (RAND_MAX));
 
 		p = 2.0f * vec3(x, y, z) - vec3(1.0f, 1.0f, 1.0f);
 
@@ -156,13 +166,13 @@ vec3 random_point_within_magnitude(f32 mag)
 	return p;
 }
 
-bool intersection(Ray r, Sphere s, Hit* h, float t_min, float t_max)
+bool intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 {
-	vec3	oc = r.origin - s.position;
-	f32		a = dot(r.direction, r.direction);
-	f32		b = 2.0f * dot(oc, r.direction);
+	vec3	oc = r->origin - s.position;
+	f32		a = dot(r->direction, r->direction);
+	f32		b = dot(oc, r->direction);
 	f32		c = dot(oc, oc) - s.radius * s.radius;
-	f32		d = b * b - 4 * a*c;
+	f32		d = b * b * a*c;
 
 	if (d > 0)
 	{
@@ -171,8 +181,8 @@ bool intersection(Ray r, Sphere s, Hit* h, float t_min, float t_max)
 		if (temp < t_max && temp > t_min)
 		{
 			h->t = temp;
-			h->p = point_at_parameter(r, temp);
-			h->n = h->p - s.position / s.radius;
+			h->point = point_at_parameter(*r, temp);
+			h->normal = h->point - s.position / s.radius;
 
 			return true;
 		}
@@ -182,8 +192,8 @@ bool intersection(Ray r, Sphere s, Hit* h, float t_min, float t_max)
 		if (temp < t_max && temp > t_min)
 		{
 			h->t = temp;
-			h->p = point_at_parameter(r, temp);
-			h->n = h->p - s.position / s.radius;
+			h->point = point_at_parameter(*r, temp);
+			h->normal = h->point - s.position / s.radius;
 
 			return true;
 		}
@@ -200,94 +210,19 @@ bool intersects_all(Ray r, Hit* h, float t_min, float t_max)
 
 	for (u32 i = 0; i < num_spheres; i++)
 	{
-		if (intersection(r, spheres[i], &temp, t_min, closest))
+		if (intersection(&r, spheres[i], &temp, t_min, closest))
 		{
 			hit_something = true;
 			closest = temp.t;
 
 			h->t = temp.t;
-			h->p = temp.p;
-			h->n = temp.n;
+			h->point = temp.point;
+			h->normal = temp.normal;
 		}
 	}
 
 	return hit_something;
 }
-
-void raytrace(Ray ray)
-{
-
-}
-
-
-
-
-
-
-
-
-
-
-//
-//vec3 raytrace(Ray ray)
-//{
-//	u8	num_hit = 0;
-//	u8  hit_indices[num_spheres];
-//	f32 t_values[num_spheres];
-//	f32 t = -1.0f;
-//
-//	for (s8 i = 0; i < num_spheres; i++)
-//	{
-//		t = sphere(spheres[i].position, spheres[i].radius, ray);
-//
-//		if (t > 0.0f)
-//		{
-//			hit_indices[num_hit] = i;
-//			t_values[num_hit] = t;
-//			num_hit++;
-//		}
-//	}
-//
-//	if (num_hit > 1)
-//	{
-//		f32 closest_t = FLT_MAX;
-//		s8	closest_index = 0;
-//
-//		for (s8 i = 0; i < num_hit; i++)
-//		{
-//			u8 hit_index = hit_indices[i];
-//
-//			vec3 d = ray.origin - spheres[hit_index].position;
-//
-//			if (t_values[i] < closest_t)
-//			{
-//				closest_t = t_values[i];
-//				closest_index = hit_index; 
-//			}
-//		}
-//
-//		vec3 rp = point_at_parameter(ray, closest_t);
-//
-//		vec3 normal = normalize(rp - spheres[closest_index].position);
-//
-//		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
-//	}
-//	else if (num_hit == 1)
-//	{
-//		vec3 rp = point_at_parameter(ray, t_values[0]);
-//		vec3 normal = normalize(rp - spheres[hit_indices[0]].position);
-//
-//		return 0.5f * vec3(normal.x() + 1.0f, normal.y() + 1.0f, normal.z() + 1.0f);
-//	}
-//
-//	vec3 dir = normalize(ray.direction);
-//
-//	t = 0.5*(dir.y() + 1.0f);
-//
-//	return (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5f, 0.7f, 1.0f);
-//
-//	//return vec3(0.0f, 0.0f, 0.0f);
-//}
 
 void paint()
 {
@@ -355,14 +290,14 @@ vec3 colour(Ray r)
 {
 	Hit h;
 
-	if (intersects_all(r, &h, 0.0f, FLT_MAX))
+	if (intersects_all(r, &h, 0.001f, FLT_MAX))
 	{
 		vec3 random_unit_vector = random_point_within_magnitude(1.0f);
-		vec3 target = h.p + h.n + random_unit_vector;
+		vec3 target = h.point + h.normal + random_unit_vector;
 
 		Ray ray;
-		ray.origin = h.p;
-		ray.direction = target - h.p;
+		ray.origin = h.point;
+		ray.direction = target - h.point;
 
 		vec3 col = colour(ray);
 
@@ -407,27 +342,61 @@ void setup_bitmap()
 	bitmap_image_data = (u8*)_aligned_malloc(info_header.image_size, 64);
 }
 
+
+
+
 void render_pixel(u32 x, u32 y)
 {
-	vec3 col = vec3(0.0f, 0.0f, 0.0f);
+	vec3	col = vec3(0.0f, 0.0f, 0.0f);
+	u32		num_aa_samples = 0;
 
-	f32 x_inc = 1.0f / ssx_samples;
-	f32 y_inc = 1.0f / ssy_samples;
-
-	for (s16 ssy = 0; ssy < ssy_samples; ssy++)
+	switch (aa_samplestyle)
 	{
-		for (s16 ssx = 0; ssx < ssx_samples; ssx++)
+		case AA_SAMPLESTYLE_GRID:
 		{
-			f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
-			f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
+			f32 x_inc = 1.0f / ssx_samples;
+			f32 y_inc = 1.0f / ssy_samples;
 
-			Ray r = get_ray(camera, u, v);
+			num_aa_samples = ssx_samples * ssy_samples;
 
-			col += colour(r);
+			for (s16 ssy = 0; ssy < ssy_samples; ssy++)
+			{
+				for (s16 ssx = 0; ssx < ssx_samples; ssx++)
+				{
+					f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
+					f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
+
+					Ray r = get_ray(camera, u, v);
+
+					col += colour(r);
+				}
+			}
+		}
+
+		case AA_SAMPLESTYLE_RANDOM:
+		{
+			f32 x_inc = 1.0f / ssx_samples;
+			f32 y_inc = 1.0f / ssy_samples;
+
+			col = vec3(0.0f, 0.0f, 0.0f);
+
+			num_aa_samples = rnd_samples;
+
+			for (s16 sample = 0; sample < num_aa_samples; sample++)
+			{
+				f32 u = (x + ((f32) rand() / (RAND_MAX))) / (f32) output_width;
+				f32 v = (y + ((f32) rand() / (RAND_MAX))) / (f32) output_height;
+
+				Ray r = get_ray(camera, u, v);
+
+				col += colour(r);
+			}
 		}
 	}
 
-	col /= (f32)(ssx_samples * ssy_samples);
+	col /= (f32)(num_aa_samples);
+
+	col  = vec3(sqrt(col.r()), sqrt(col.g()), sqrt(col.b()));
 
 	u8 red = (int) 255.99 * col.r();
 	u8 grn = (int) 255.99 * col.g();
@@ -512,7 +481,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	SYSTEM_INFO system_info;
 	GetSystemInfo(&system_info);
 
-	u16 cpu_count = system_info.dwNumberOfProcessors;
+	u16 cpu_count = multithreaded ? system_info.dwNumberOfProcessors : 1;
 	u32* render_thread_data = (u32*)malloc(cpu_count * sizeof(u32));
 	HANDLE* render_threads = (HANDLE*)malloc(cpu_count * sizeof(HANDLE));
 	clock_t start, end;
