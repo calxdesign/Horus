@@ -17,13 +17,19 @@ typedef unsigned long long    u64;
 typedef float				  f32;
 typedef double				  f64;
 
-typedef struct vec3
+typedef enum Material
+{
+	METAL, LAMBERT
+
+} Material;
+
+typedef struct v3
 {
 	f32 x;
 	f32 y;
 	f32 z;
 
-} vec3;
+} v3;
 
 typedef struct BitmapFileHeader
 {
@@ -53,39 +59,35 @@ typedef struct BitmapInfoHeader
 
 typedef struct Ray
 {
-	vec3 origin;
-	vec3 direction;
+	v3 origin;
+	v3 direction;
 
 } Ray;
 
 typedef struct Sphere
 {
-	vec3 position;
-	f32  radius;
+	v3			position;
+	f32			radius;
+	Material	material;
 
 } Sphere;
 
 typedef struct Camera
 {
-	vec3 bottom_left;
-	vec3 eye;
-	vec3 horizontal;
-	vec3 vertical;
+	v3 bottom_left;
+	v3 eye;
+	v3 horizontal;
+	v3 vertical;
 
 } Camera;
-
-typedef struct Material
-{
-	f32 reflection;
-
-} Material;
 
 typedef struct Hit
 {
 	f32			t;
-	vec3		point;
-	vec3		normal;
-	Material*	material;
+	v3		point;
+	v3		normal;
+	Material	material;
+
 } Hit;
 
 static u32						output_width = 800;
@@ -97,8 +99,8 @@ static u32						rnd_samples = 127;
 
 #define	AA_SAMPLESTYLE_GRID		0
 #define	AA_SAMPLESTYLE_RANDOM	1
-#define	output_size				output_width * output_height
-#define	aa_samplestyle			AA_SAMPLESTYLE_RANDOM
+#define	OUTPUTSIZE				output_width * output_height
+#define	AA_SAMPLESTYLE			AA_SAMPLESTYLE_RANDOM
 #define	RENDER					0
 #define	IDLE					1
 #define MULTITHREADING			1
@@ -116,16 +118,16 @@ static BitmapInfoHeader			info_header;
 static Camera					camera;
 static u8						STATE = RENDER;
 
-const char class_name[] = "Simple Rheytracer";
+const char class_name[] = "Horus Path-Tracer";
 
-f32 vec3_dot(vec3 a, vec3 b)
+f32 v3_dot(v3 a, v3 b)
 {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-vec3 vec3_div(vec3 a, f32 n)
+v3 v3_div(v3 a, f32 n)
 {
-	vec3 v;
+	v3 v;
 	v.x = a.x / n;
 	v.y = a.y / n;
 	v.z = a.z / n;
@@ -133,30 +135,37 @@ vec3 vec3_div(vec3 a, f32 n)
 	return v;
 }
 
-f32 vec3_mag(vec3 a)
+f32 v3_mag(v3 a)
 {
 	return (f32)sqrt(a.x*a.x + a.y * a.y + a.z * a.z);
 }
 
-vec3 vec3_normalized(vec3 a)
+v3 vec3(f32 x, f32 y, f32 z)
 {
-	f32  m = vec3_mag(a);
-	vec3 v;
-	v.x = 0.0f;
-	v.y = 0.0f;
-	v.z = 0.0f;
-
-	if (m != 0.0f && m != 1.0f) 
-	{
-		v = vec3_div(a, m);
-	}
+	v3 v;
+	v.x = x;
+	v.y = y;
+	v.z = z;
 
 	return v;
 }
 
-vec3 vec3_mul(vec3 a, f32 n)
+v3 v3_normalized(v3 a)
 {
-	vec3 v;
+	f32  m = v3_mag(a);
+	v3 v;
+	v.x = 0.0f;
+	v.y = 0.0f;
+	v.z = 0.0f;
+
+	if (m != 0.0f && m != 1.0f) v = v3_div(a, m);
+
+	return v;
+}
+
+v3 v3_mul(v3 a, f32 n)
+{
+	v3 v;
 	v.x = a.x * n;
 	v.y = a.y * n;
 	v.z = a.z * n;
@@ -164,9 +173,9 @@ vec3 vec3_mul(vec3 a, f32 n)
 	return v;
 }
 
-vec3 vec3_sub(vec3 a, vec3 b)
+v3 v3_sub(v3 a, v3 b)
 {
-	vec3 v;
+	v3 v;
 	v.x = a.x - b.x;
 	v.y = a.y - b.y;
 	v.z = a.z - b.z;
@@ -174,9 +183,9 @@ vec3 vec3_sub(vec3 a, vec3 b)
 	return v;
 }
 
-vec3 vec3_add(vec3 a, vec3 b)
+v3 v3_add(v3 a, v3 b)
 {
-	vec3 v;
+	v3 v;
 
 	v.x = a.x + b.x;
 	v.y = a.y + b.y;
@@ -185,25 +194,24 @@ vec3 vec3_add(vec3 a, vec3 b)
 	return v;
 }
 
-f32 fract(f32 x)
+v3 v3_reflect(v3 a, v3 normal)
 {
-	return x - (s64)x;
+	f32 dp = v3_dot(a, normal);
+	v3	v = v3_mul(normal, 2.0f*dp);
+	v3  r = v3_sub(a, v);
+
+	return r;
 }
 
-f32 hash(f32 x)
+v3 point_at_parameter(Ray r, float t)
 {
-	return abs(fract(sin(x) * 43758.5453));
-}
-
-vec3 point_at_parameter(Ray r, float t)
-{
-	vec3 t_dir = vec3_mul(r.direction, t);
-	vec3 point = vec3_add(t_dir, r.origin);
+	v3 t_dir = v3_mul(r.direction, t);
+	v3 point = v3_add(t_dir, r.origin);
 
 	return point;
 }
 
-f32 vec3_squared_length(vec3 a)
+f32 v3_squared_length(v3 a)
 {
 	return (a.x*a.x + a.y * a.y + a.z * a.z);
 }
@@ -213,12 +221,12 @@ Ray get_ray(Camera cam, f32 u, f32 v)
 	Ray ray;
 	ray.origin = cam.eye;
 
-	vec3 u_norm = vec3_mul(cam.horizontal, u);
-	vec3 v_norm = vec3_mul(cam.vertical, v);
-	vec3 uv_norm = vec3_add(u_norm, v_norm);
-	vec3 uv_cam = vec3_add(uv_norm, cam.bottom_left);
+	v3 u_norm = v3_mul(cam.horizontal, u);
+	v3 v_norm = v3_mul(cam.vertical, v);
+	v3 uv_norm = v3_add(u_norm, v_norm);
+	v3 uv_cam = v3_add(uv_norm, cam.bottom_left);
 
-	ray.direction = vec3_sub(uv_cam, cam.eye);
+	ray.direction = v3_sub(uv_cam, cam.eye);
 
 	return ray;
 }
@@ -238,63 +246,61 @@ void save_file(void)
 	fclose(file);
 }
 
-f32 sphere(vec3 centre, float radius, Ray r)
+f32 sphere(v3 centre, float radius, Ray r)
 {
-	vec3	oc = vec3_sub(r.origin, centre);
-	f32		a = vec3_dot(r.direction, r.direction);
-	f32		b = 2.0f * vec3_dot(oc, r.direction);
-	f32		c = vec3_dot(oc, oc) - radius * radius;
+	v3	oc = v3_sub(r.origin, centre);
+	f32		a = v3_dot(r.direction, r.direction);
+	f32		b = 2.0f * v3_dot(oc, r.direction);
+	f32		c = v3_dot(oc, oc) - radius * radius;
 	f32		d = b * b - 4 * a*c;
 
 	if (d < 0) return -1.0f;
 	else return (-b - sqrt(d)) / (2.0f * a);
 }
 
-vec3 random_point_within_magnitude(f32 mag)
+v3 random_point_within_magnitude(f32 mag)
 {
 	while (1)
 	{
-		vec3 pos;
+		v3 pos;
 		pos.x = ((f32)rand() / (RAND_MAX));
 		pos.y = ((f32)rand() / (RAND_MAX));
 		pos.z = ((f32)rand() / (RAND_MAX));
 
-		vec3 point = vec3_mul(pos, 2.0f);
+		v3 point = v3_mul(pos, 2.0f);
 
-		vec3 unit;
-		unit.x = 1.0f;
-		unit.y = 1.0f;
-		unit.z = 1.0f;
+		v3 unit = vec3(1.0f, 1.0f, 1.0f);
 
-		vec3 final = vec3_sub(point, unit);
+		v3 final = v3_sub(point, unit);
 
-		if (vec3_squared_length(final) < mag)
+		if (v3_squared_length(final) < mag)
 		{
 			return final;
 		}
-	}	
+	}
 }
 
 u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 {
-	vec3	oc = vec3_sub(r->origin, s.position);
-	f32		a = vec3_dot(r->direction, r->direction);
-	f32		b = vec3_dot(oc, r->direction);
-	f32		c = vec3_dot(oc, oc) - s.radius * s.radius;
-	f32		d = b*b*a*c;
+	v3	oc = v3_sub(r->origin, s.position);
+	f32	a  = v3_dot(r->direction, r->direction);
+	f32	b  = v3_dot(oc, r->direction);
+	f32	c  = v3_dot(oc, oc) - s.radius * s.radius;
+
+	f32	d  = b * b*a*c;
 
 	if (d > 0)
 	{
 		float temp = 0.0f;
-		temp = (-b - sqrt(b*b - a*c)) / a;
+		temp = (-b - sqrt(b*b - a * c)) / a;
 
 		if (temp < t_max && temp > t_min)
 		{
 			h->t = temp;
 			h->point = point_at_parameter(*r, temp);
 
-			vec3 dir = vec3_sub(h->point, s.position);
-			h->normal = vec3_div(dir, s.radius);
+			v3 dir = v3_sub(h->point, s.position);
+			h->normal = v3_div(dir, s.radius);
 
 			return 1;
 		}
@@ -306,8 +312,8 @@ u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 			h->t = temp;
 			h->point = point_at_parameter(*r, temp);
 
-			vec3 dir = vec3_sub(h->point, s.position);
-			h->normal = vec3_div(dir, s.radius);
+			v3 dir = v3_sub(h->point, s.position);
+			h->normal = v3_div(dir, s.radius);
 
 			return 1;
 		}
@@ -332,6 +338,7 @@ u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 			h->t = temp.t;
 			h->point = temp.point;
 			h->normal = temp.normal;
+			h->material = spheres[i].material;
 		}
 	}
 
@@ -379,82 +386,84 @@ void setup_scene(void)
 {
 	spheres = (Sphere*)malloc(num_spheres * sizeof(Sphere));
 
+	Material object_sphere_material = METAL;
 	f32 object_sphere_radius = 0.5f;
-	vec3 object_sphere_position;
-	object_sphere_position.x = 000.0f;
-	object_sphere_position.y = 000.0f;
-	object_sphere_position.z = -001.0f;
+	v3 object_sphere_position = vec3(0.0f, 0.0f, -1.0f);
 
+	Material ground_sphere_material = LAMBERT;
 	f32 ground_sphere_radius = 100.0f;
-	vec3 ground_sphere_position;
-	ground_sphere_position.x = 000.0f;
-	ground_sphere_position.y = -100.5f;
-	ground_sphere_position.z = -001.0f;
+	v3 ground_sphere_position = vec3(0.0f, -100.5f, -1.0f);
 
 	spheres[0].position = object_sphere_position;
 	spheres[0].radius = object_sphere_radius;
+	spheres[0].material = object_sphere_material;
 
 	spheres[1].position = ground_sphere_position;
 	spheres[1].radius = ground_sphere_radius;
+	spheres[1].material = ground_sphere_material;
 }
 
 void setup_camera(void)
 {
-	camera.eye.x = 0.0f;
-	camera.eye.y = 0.0f;
-	camera.eye.z = 0.0f;
-
-	camera.bottom_left.x = -2.0f;
-	camera.bottom_left.y = -1.0f;
-	camera.bottom_left.z = -1.0f;
-
-	camera.horizontal.x = 4.0f;
-	camera.horizontal.y = 0.0f;
-	camera.horizontal.z = 0.0f;
-
-	camera.vertical.x = 0.0f;
-	camera.vertical.y = 2.0f;
-	camera.vertical.z = 0.0f;
+	camera.eye = vec3(0.0f, 0.0f, 0.0f);
+	camera.bottom_left = vec3(-2.0f, -1.0f, -1.0f);
+	camera.horizontal = vec3(4.0f, 0.0f, 0.0f);
+	camera.vertical = vec3(0.0f, 2.0f, 0.0f);
 }
 
-vec3 colour(Ray r)
+v3 colour(Ray r)
 {
 	Hit h;
 
 	if (intersects_all(r, &h, 0.001f, FLT_MAX))
 	{
-		vec3 random_unit_vector = random_point_within_magnitude(1.0f);
-		vec3 point_pos = vec3_add(h.point, h.normal);
-		vec3 target = vec3_add(point_pos, random_unit_vector);
-		
-		Ray ray;
-		ray.origin = h.point;
-		ray.direction = vec3_sub(target, h.point);
+		switch (h.material)
+		{
+			case LAMBERT:
+			{
+				v3 random_unit_vector = random_point_within_magnitude(1.0f);
+				v3 point_pos = v3_add(h.point, h.normal);
+				v3 target = v3_add(point_pos, random_unit_vector);
 
-		vec3 col = colour(ray);
-		vec3 final = vec3_mul(col, 0.5f);
+				Ray ray;
+				ray.origin = h.point;
+				ray.direction = v3_sub(target, h.point);
 
-		return final;
+				v3 col = colour(ray);
+				v3 lambert = v3_mul(col, 0.5f);
+
+				return lambert;
+			}
+
+			case METAL:
+			{
+				v3 ray_dir_n = v3_normalized(r.direction);
+				v3 reflected = v3_reflect(ray_dir_n, h.normal);
+			
+				Ray scattered; 
+				scattered.origin = h.point;
+				scattered.direction = reflected;
+
+				f32 v = v3_dot(scattered.direction, h.normal);
+
+				v3 metal = (v > 0.0f) ? colour(scattered) : vec3(0.0f, 0.0f, 0.0f);
+
+				return metal;
+			}
+		}
 	}
 	else
 	{
-		vec3 dir_n = vec3_normalized(r.direction);
+		v3 dir_n = v3_normalized(r.direction);
 
 		f32 t = 0.5f * (dir_n.y + 1.0f);
 
-		vec3 white;
-		white.x = 1.0f;
-		white.y = 1.0f;
-		white.z = 1.0f;
+		v3 white = vec3(1.0f, 1.0f, 1.0f);
+		v3 blue = vec3(0.5f, 0.7f, 1.0f);
 
-		vec3 blue;
-		blue.x = 0.5f;
-		blue.y = 0.7f;
-		blue.z = 1.0f;
-
-		vec3 white_component = vec3_mul(white, 1.0f - t);
-		vec3 blue_component = vec3_mul(blue, t);
-		vec3 gradient = vec3_add(white_component, blue_component);
+		v3 white_component = v3_mul(white, 1.0f - t);
+		v3 blue_component = v3_mul(blue, t);
+		v3 gradient = v3_add(white_component, blue_component);
 
 		return gradient;
 	}
@@ -491,58 +500,32 @@ void setup_bitmap(void)
 
 void render_pixel(u32 x, u32 y)
 {
-	vec3	col;
+	v3	col;
 	col.x = 0.0f;
 	col.y = 0.0f;
 	col.z = 0.0f;
 
 	u32	num_aa_samples = 8;
 
-	switch (aa_samplestyle)
+	switch (AA_SAMPLESTYLE)
 	{
-		case AA_SAMPLESTYLE_GRID:
+	case AA_SAMPLESTYLE_GRID:
+	{
+		f32 x_inc = 1.0f / ssx_samples;
+		f32 y_inc = 1.0f / ssy_samples;
+
+		num_aa_samples = ssx_samples * ssy_samples;
+
+		for (s16 ssy = 0; ssy < ssy_samples; ssy++)
 		{
-			f32 x_inc = 1.0f / ssx_samples;
-			f32 y_inc = 1.0f / ssy_samples;
-
-			num_aa_samples = ssx_samples * ssy_samples;
-
-			for (s16 ssy = 0; ssy < ssy_samples; ssy++)
+			for (s16 ssx = 0; ssx < ssx_samples; ssx++)
 			{
-				for (s16 ssx = 0; ssx < ssx_samples; ssx++)
-				{
-					f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
-					f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
-
-					Ray r = get_ray(camera, u, v);
-
-					vec3 c = colour(r);
-					col.x += c.x;
-					col.y += c.y;
-					col.z += c.z;
-				}
-			}
-		}
-
-		case AA_SAMPLESTYLE_RANDOM:
-		{
-			f32 x_inc = 1.0f / ssx_samples;
-			f32 y_inc = 1.0f / ssy_samples;
-
-			col.x = 0.0f;
-			col.y = 0.0f;
-			col.z = 0.0f;
-
-			num_aa_samples = rnd_samples;
-
-			for (s16 sample = 0; sample < num_aa_samples; sample++)
-			{
-				f32 u = (x + ((f32) rand() / (RAND_MAX))) / (f32) output_width;
-				f32 v = (y + ((f32) rand() / (RAND_MAX))) / (f32) output_height;
+				f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
+				f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
 
 				Ray r = get_ray(camera, u, v);
 
-				vec3 c = colour(r);
+				v3 c = colour(r);
 				col.x += c.x;
 				col.y += c.y;
 				col.z += c.z;
@@ -550,12 +533,38 @@ void render_pixel(u32 x, u32 y)
 		}
 	}
 
-	vec3 final = vec3_div(col, (f32) num_aa_samples);
+	case AA_SAMPLESTYLE_RANDOM:
+	{
+		f32 x_inc = 1.0f / ssx_samples;
+		f32 y_inc = 1.0f / ssy_samples;
 
-	u8 red = (int) (255.99 * sqrt(final.x));
-	u8 grn = (int) (255.99 * sqrt(final.y));
-	u8 blu = (int) (255.99 * sqrt(final.z));
-	u8 res = (int) 0;
+		col.x = 0.0f;
+		col.y = 0.0f;
+		col.z = 0.0f;
+
+		num_aa_samples = rnd_samples;
+
+		for (s16 sample = 0; sample < num_aa_samples; sample++)
+		{
+			f32 u = (x + ((f32)rand() / (RAND_MAX))) / (f32)output_width;
+			f32 v = (y + ((f32)rand() / (RAND_MAX))) / (f32)output_height;
+
+			Ray r = get_ray(camera, u, v);
+
+			v3 c = colour(r);
+			col.x += c.x;
+			col.y += c.y;
+			col.z += c.z;
+		}
+	}
+	}
+
+	v3 final = v3_div(col, (f32)num_aa_samples);
+
+	u8 red = (int)(255.99 * sqrt(final.x));
+	u8 grn = (int)(255.99 * sqrt(final.y));
+	u8 blu = (int)(255.99 * sqrt(final.z));
+	u8 res = (int)0;
 
 	int bitmap_index = ((y * output_width) + x) * 4;
 
@@ -589,7 +598,7 @@ DWORD WINAPI PaintThread(void* data)
 
 DWORD WINAPI RenderThread(void* data)
 {
-	u32* d = (u32*) data;
+	u32* d = (u32*)data;
 
 	u16 offset = (*d >> 16);
 	u16 increment = *d;
@@ -604,20 +613,20 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	WNDCLASSEX wc;
 	MSG msg;
 
-	vec3 first;
+	v3 first;
 	first.x = 1.0f;
 	first.y = 1.0f;
 	first.z = 1.0f;
 
-	vec3 second;
+	v3 second;
 	second.x = 2.0f;
 	second.y = 2.0f;
 	second.z = 2.0f;
 
-	vec3 a = vec3_add(first, second);
-	vec3 b = vec3_div(first, 2.0f);
-	vec3 c = vec3_mul(first, 0.5f);
-	vec3 d = vec3_sub(first, second);
+	v3 a = v3_add(first, second);
+	v3 b = v3_div(first, 2.0f);
+	v3 c = v3_mul(first, 0.5f);
+	v3 d = v3_sub(first, second);
 
 	wc.cbSize = sizeof(WNDCLASSEX);
 	wc.style = 0;
@@ -692,7 +701,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 				sprintf(s, "Finished in %f", cpu_time_used);
 
-				if(FINISHED_MESSAGE) MessageBox(NULL, s, "Renderer", MB_ICONEXCLAMATION | MB_OK);
+				if (FINISHED_MESSAGE) MessageBox(NULL, s, "Renderer", MB_ICONEXCLAMATION | MB_OK);
 
 				STATE = IDLE;
 			}
