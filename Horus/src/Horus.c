@@ -17,11 +17,11 @@ typedef unsigned long long    u64;
 typedef float				  f32;
 typedef double				  f64;
 
-typedef enum Material
+typedef enum MaterialType
 {
 	METAL, LAMBERT
 
-} Material;
+} MaterialType;
 
 typedef struct v3
 {
@@ -64,6 +64,13 @@ typedef struct Ray
 
 } Ray;
 
+typedef struct Material
+{
+	MaterialType type;
+	v3			 albedo;
+
+} Material;
+
 typedef struct Sphere
 {
 	v3			position;
@@ -84,8 +91,8 @@ typedef struct Camera
 typedef struct Hit
 {
 	f32			t;
-	v3		point;
-	v3		normal;
+	v3			point;
+	v3			normal;
 	Material	material;
 
 } Hit;
@@ -118,7 +125,7 @@ static BitmapInfoHeader			info_header;
 static Camera					camera;
 static u8						STATE = RENDER;
 
-const char class_name[] = "Horus Path-Tracer";
+const char class_name[] = "BerkTracer";
 
 f32 v3_dot(v3 a, v3 b)
 {
@@ -163,12 +170,22 @@ v3 v3_normalized(v3 a)
 	return v;
 }
 
-v3 v3_mul(v3 a, f32 n)
+v3 v3_mulf(v3 a, f32 n)
 {
 	v3 v;
 	v.x = a.x * n;
 	v.y = a.y * n;
 	v.z = a.z * n;
+
+	return v;
+}
+
+v3 v3_mulv(v3 a, v3 b)
+{
+	v3 v;
+	v.x = a.x * b.x;
+	v.y = a.y * b.y;
+	v.z = a.z * b.z;
 
 	return v;
 }
@@ -197,7 +214,7 @@ v3 v3_add(v3 a, v3 b)
 v3 v3_reflect(v3 a, v3 normal)
 {
 	f32 dp = v3_dot(a, normal);
-	v3	v = v3_mul(normal, 2.0f*dp);
+	v3	v = v3_mulf(normal, 2.0f*dp);
 	v3  r = v3_sub(a, v);
 
 	return r;
@@ -205,7 +222,7 @@ v3 v3_reflect(v3 a, v3 normal)
 
 v3 point_at_parameter(Ray r, float t)
 {
-	v3 t_dir = v3_mul(r.direction, t);
+	v3 t_dir = v3_mulf(r.direction, t);
 	v3 point = v3_add(t_dir, r.origin);
 
 	return point;
@@ -221,8 +238,8 @@ Ray get_ray(Camera cam, f32 u, f32 v)
 	Ray ray;
 	ray.origin = cam.eye;
 
-	v3 u_norm = v3_mul(cam.horizontal, u);
-	v3 v_norm = v3_mul(cam.vertical, v);
+	v3 u_norm = v3_mulf(cam.horizontal, u);
+	v3 v_norm = v3_mulf(cam.vertical, v);
 	v3 uv_norm = v3_add(u_norm, v_norm);
 	v3 uv_cam = v3_add(uv_norm, cam.bottom_left);
 
@@ -267,7 +284,7 @@ v3 random_point_within_magnitude(f32 mag)
 		pos.y = ((f32)rand() / (RAND_MAX));
 		pos.z = ((f32)rand() / (RAND_MAX));
 
-		v3 point = v3_mul(pos, 2.0f);
+		v3 point = v3_mulf(pos, 2.0f);
 
 		v3 unit = vec3(1.0f, 1.0f, 1.0f);
 
@@ -367,7 +384,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	{
 		paint();
 	}
-	break;
+		break;
 	case WM_CLOSE:
 		save_file();
 		DestroyWindow(hwnd);
@@ -386,11 +403,17 @@ void setup_scene(void)
 {
 	spheres = (Sphere*)malloc(num_spheres * sizeof(Sphere));
 
-	Material object_sphere_material = METAL;
+	Material object_sphere_material;
+	object_sphere_material.type = LAMBERT;
+	object_sphere_material.albedo = vec3(0.549f, 0.658f, -0.218f);
+
 	f32 object_sphere_radius = 0.5f;
 	v3 object_sphere_position = vec3(0.0f, 0.0f, -1.0f);
 
-	Material ground_sphere_material = LAMBERT;
+	Material ground_sphere_material;
+	ground_sphere_material.type = LAMBERT;
+	ground_sphere_material.albedo = vec3(1.0f, 1.0f, 1.0f);
+
 	f32 ground_sphere_radius = 100.0f;
 	v3 ground_sphere_position = vec3(0.0f, -100.5f, -1.0f);
 
@@ -417,7 +440,7 @@ v3 colour(Ray r)
 
 	if (intersects_all(r, &h, 0.001f, FLT_MAX))
 	{
-		switch (h.material)
+		switch (h.material.type)
 		{
 			case LAMBERT:
 			{
@@ -429,8 +452,8 @@ v3 colour(Ray r)
 				ray.origin = h.point;
 				ray.direction = v3_sub(target, h.point);
 
-				v3 col = colour(ray);
-				v3 lambert = v3_mul(col, 0.5f);
+				v3 c = colour(ray);
+				v3 lambert = v3_mulv(c, h.material.albedo);
 
 				return lambert;
 			}
@@ -445,8 +468,10 @@ v3 colour(Ray r)
 				scattered.direction = reflected;
 
 				f32 v = v3_dot(scattered.direction, h.normal);
+				v3	c = colour(scattered);
+				v3  calb = v3_mulv(c, h.material.albedo);
 
-				v3 metal = (v > 0.0f) ? colour(scattered) : vec3(0.0f, 0.0f, 0.0f);
+				v3 metal = (v > 0.0f) ? calb : vec3(0.0f, 0.0f, 0.0f);
 
 				return metal;
 			}
@@ -461,8 +486,8 @@ v3 colour(Ray r)
 		v3 white = vec3(1.0f, 1.0f, 1.0f);
 		v3 blue = vec3(0.5f, 0.7f, 1.0f);
 
-		v3 white_component = v3_mul(white, 1.0f - t);
-		v3 blue_component = v3_mul(blue, t);
+		v3 white_component = v3_mulf(white, 1.0f - t);
+		v3 blue_component = v3_mulf(blue, t);
 		v3 gradient = v3_add(white_component, blue_component);
 
 		return gradient;
@@ -625,7 +650,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 	v3 a = v3_add(first, second);
 	v3 b = v3_div(first, 2.0f);
-	v3 c = v3_mul(first, 0.5f);
+	v3 c = v3_mulf(first, 0.5f);
 	v3 d = v3_sub(first, second);
 
 	wc.cbSize = sizeof(WNDCLASSEX);
