@@ -98,9 +98,6 @@ static u32						rnd_samples = 127;
 #define	AA_SAMPLESTYLE_GRID		0
 #define	AA_SAMPLESTYLE_RANDOM	1
 #define	output_size				output_width * output_height
-#define bool					u32
-#define true					1
-#define false					0
 #define	aa_samplestyle			AA_SAMPLESTYLE_RANDOM
 #define	RENDER					0
 #define	IDLE					1
@@ -216,10 +213,10 @@ Ray get_ray(Camera cam, f32 u, f32 v)
 	Ray ray;
 	ray.origin = cam.eye;
 
-	vec3 u_norm  = vec3_mul(cam.horizontal, u);
-	vec3 v_norm  = vec3_mul(cam.vertical, v);
+	vec3 u_norm = vec3_mul(cam.horizontal, u);
+	vec3 v_norm = vec3_mul(cam.vertical, v);
 	vec3 uv_norm = vec3_add(u_norm, v_norm);
-	vec3 uv_cam  = vec3_add(uv_norm, cam.bottom_left);
+	vec3 uv_cam = vec3_add(uv_norm, cam.bottom_left);
 
 	ray.direction = vec3_sub(uv_cam, cam.eye);
 
@@ -255,30 +252,30 @@ f32 sphere(vec3 centre, float radius, Ray r)
 
 vec3 random_point_within_magnitude(f32 mag)
 {
-	vec3 point;
-
-	do
+	while (1)
 	{
 		vec3 pos;
-		pos.x = ((f64)rand() / (RAND_MAX));
-		pos.y = ((f64)rand() / (RAND_MAX));
-		pos.z = ((f64)rand() / (RAND_MAX));
+		pos.x = ((f32)rand() / (RAND_MAX));
+		pos.y = ((f32)rand() / (RAND_MAX));
+		pos.z = ((f32)rand() / (RAND_MAX));
+
+		vec3 point = vec3_mul(pos, 2.0f);
 
 		vec3 unit;
 		unit.x = 1.0f;
 		unit.y = 1.0f;
 		unit.z = 1.0f;
 
-		vec3 dir = vec3_sub(pos, unit);
-		
-		point = vec3_mul(dir, 2.0f);
+		vec3 final = vec3_sub(point, unit);
 
-	} while (vec3_squared_length(point) >= mag);
-
-	return point;
+		if (vec3_squared_length(final) < mag)
+		{
+			return final;
+		}
+	}	
 }
 
-bool intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
+u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 {
 	vec3	oc = vec3_sub(r->origin, s.position);
 	f32		a = vec3_dot(r->direction, r->direction);
@@ -299,7 +296,7 @@ bool intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 			vec3 dir = vec3_sub(h->point, s.position);
 			h->normal = vec3_div(dir, s.radius);
 
-			return true;
+			return 1;
 		}
 
 		temp = (-b + sqrt(b*b - a * c)) / a;
@@ -312,24 +309,24 @@ bool intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 			vec3 dir = vec3_sub(h->point, s.position);
 			h->normal = vec3_div(dir, s.radius);
 
-			return true;
+			return 1;
 		}
 	}
 
-	return false;
+	return 0;
 }
 
-bool intersects_all(Ray r, Hit* h, float t_min, float t_max)
+u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 {
-	Hit temp;
-	bool hit_something = false;
-	u64 closest = t_max;
+	Hit	 temp;
+	u32  hit_something = 0;
+	u64  closest = t_max;
 
 	for (u32 i = 0; i < num_spheres; i++)
 	{
 		if (intersection(&r, spheres[i], &temp, t_min, closest))
 		{
-			hit_something = true;
+			hit_something = 1;
 			closest = temp.t;
 
 			h->t = temp.t;
@@ -584,7 +581,7 @@ void render(u16 offset, u16 inc)
 
 DWORD WINAPI PaintThread(void* data)
 {
-	while (true)
+	while (1)
 	{
 		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE);
 		Sleep(30);
