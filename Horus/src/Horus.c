@@ -489,9 +489,6 @@ void setup_bitmap(void)
 	bitmap_image_data = (u8*)_aligned_malloc(info_header.image_size, 64);
 }
 
-
-
-
 void render_pixel(u32 x, u32 y)
 {
 	vec3	col;
@@ -553,7 +550,7 @@ void render_pixel(u32 x, u32 y)
 		}
 	}
 
-	vec3 final = vec3_div(col, (f32)num_aa_samples);
+	vec3 final = vec3_div(col, (f32) num_aa_samples);
 
 	u8 red = (int) (255.99 * sqrt(final.x));
 	u8 grn = (int) (255.99 * sqrt(final.y));
