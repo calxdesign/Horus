@@ -1,3 +1,26 @@
+/*H*******************************************************************
+*
+* FILENAME :        Horus.c             
+*
+* DESCRIPTION :
+*       A simple multi-threaded ray/path-tracer in C with 
+*		extremely limited additional vector functions, window 
+*		handling and basic file output. I am under no illusion
+*		about code quality, performance or cleanliness.
+*
+* NOTES :
+*       This is a C implementation based around @Peter_shirley's 
+*		"RayTracing in One Weekend" book (which is brilliant, and
+*		took me a lot longer than a weekend) it's called 'Horus'
+*		cos that's what my pretentious random project-name generator 
+*		decided	to call it.
+*
+* AUTHOR :    David Wilson        START DATE :    December 2018
+*			  @_calx / 
+*			  http://calx.uk
+*
+*H*/
+
 #include <windows.h>
 #include <time.h>
 #include <stdio.h>
@@ -59,8 +82,9 @@ typedef struct BitmapInfoHeader
 
 typedef struct Ray
 {
-	v3 origin;
-	v3 direction;
+	v3	origin;
+	v3	direction;
+	u32 bounces;
 
 } Ray;
 
@@ -68,6 +92,7 @@ typedef struct Material
 {
 	MaterialType type;
 	v3			 albedo;
+	f32			 fuzz;
 
 } Material;
 
@@ -82,7 +107,7 @@ typedef struct Sphere
 typedef struct Camera
 {
 	v3 bottom_left;
-	v3 eye;
+	v3 position;
 	v3 horizontal;
 	v3 vertical;
 
@@ -97,22 +122,20 @@ typedef struct Hit
 
 } Hit;
 
-static u32						output_width = 800;
-static u32						output_height = 400;
-static u32						num_spheres = 2;
-static u32						ssx_samples = 4;
-static u32						ssy_samples = 4;
-static u32						rnd_samples = 127;
+#define MULTITHREADED			
+//#define FINISHED_MESSAGE		
 
-#define	AA_SAMPLESTYLE_GRID		0
-#define	AA_SAMPLESTYLE_RANDOM	1
-#define	OUTPUTSIZE				output_width * output_height
-#define	AA_SAMPLESTYLE			AA_SAMPLESTYLE_RANDOM
+#define	NUM_SPHERES 			4
+#define NUM_AA_SAMPLES 			127
+#define OUTPUT_WIDTH			800
+#define OUTPUT_HEIGHT			400
+#define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
+#define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
+#define V_FOV					87
 #define	RENDER					0
 #define	IDLE					1
-#define MULTITHREADING			1
-#define FINISHED_MESSAGE		1
 #define OUTPUT					0
+#define MAX_BOUNCES				50
 
 static HWND						hwnd;
 static Sphere*					spheres;
@@ -236,14 +259,15 @@ f32 v3_squared_length(v3 a)
 Ray get_ray(Camera cam, f32 u, f32 v)
 {
 	Ray ray;
-	ray.origin = cam.eye;
+	ray.origin = cam.position;
 
 	v3 u_norm = v3_mulf(cam.horizontal, u);
 	v3 v_norm = v3_mulf(cam.vertical, v);
 	v3 uv_norm = v3_add(u_norm, v_norm);
 	v3 uv_cam = v3_add(uv_norm, cam.bottom_left);
 
-	ray.direction = v3_sub(uv_cam, cam.eye);
+	ray.direction = v3_sub(uv_cam, cam.position);
+	ray.bounces = 0;
 
 	return ray;
 }
@@ -263,19 +287,7 @@ void save_file(void)
 	fclose(file);
 }
 
-f32 sphere(v3 centre, float radius, Ray r)
-{
-	v3	oc = v3_sub(r.origin, centre);
-	f32		a = v3_dot(r.direction, r.direction);
-	f32		b = 2.0f * v3_dot(oc, r.direction);
-	f32		c = v3_dot(oc, oc) - radius * radius;
-	f32		d = b * b - 4 * a*c;
-
-	if (d < 0) return -1.0f;
-	else return (-b - sqrt(d)) / (2.0f * a);
-}
-
-v3 random_point_within_magnitude(f32 mag)
+v3 random_unit_sphere()
 {
 	while (1)
 	{
@@ -285,12 +297,10 @@ v3 random_point_within_magnitude(f32 mag)
 		pos.z = ((f32)rand() / (RAND_MAX));
 
 		v3 point = v3_mulf(pos, 2.0f);
-
 		v3 unit = vec3(1.0f, 1.0f, 1.0f);
-
 		v3 final = v3_sub(point, unit);
 
-		if (v3_squared_length(final) < mag)
+		if (v3_squared_length(final) < 1.0f)
 		{
 			return final;
 		}
@@ -299,12 +309,11 @@ v3 random_point_within_magnitude(f32 mag)
 
 u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 {
-	v3	oc = v3_sub(r->origin, s.position);
+	v3	i  = v3_sub(r->origin, s.position);
 	f32	a  = v3_dot(r->direction, r->direction);
-	f32	b  = v3_dot(oc, r->direction);
-	f32	c  = v3_dot(oc, oc) - s.radius * s.radius;
-
-	f32	d  = b * b*a*c;
+	f32	b  = v3_dot(i, r->direction);
+	f32	c  = v3_dot(i, i) - s.radius * s.radius;
+	f32	d  = b*b*a*c;
 
 	if (d > 0)
 	{
@@ -343,9 +352,9 @@ u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 {
 	Hit	 temp;
 	u32  hit_something = 0;
-	u64  closest = t_max;
+	f32  closest = t_max;
 
-	for (u32 i = 0; i < num_spheres; i++)
+	for (u32 i = 0; i < NUM_SPHERES; i++)
 	{
 		if (intersection(&r, spheres[i], &temp, t_min, closest))
 		{
@@ -401,37 +410,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 
 void setup_scene(void)
 {
-	spheres = (Sphere*)malloc(num_spheres * sizeof(Sphere));
+	spheres = malloc(NUM_SPHERES * sizeof(Sphere));
 
-	Material object_sphere_material;
-	object_sphere_material.type = LAMBERT;
-	object_sphere_material.albedo = vec3(0.549f, 0.658f, -0.218f);
+	spheres[0].position = vec3(0.0f,  0.0f, -1.0f);
+	spheres[0].radius = 0.5f;
+	spheres[0].material.type = LAMBERT;
+	spheres[0].material.albedo = vec3(0.8f, 0.3f, 0.3f);
 
-	f32 object_sphere_radius = 0.5f;
-	v3 object_sphere_position = vec3(0.0f, 0.0f, -1.0f);
+	spheres[1].position = vec3(0.0f, -100.5f, -1.0f);
+	spheres[1].radius = 100.0f;
+	spheres[1].material.type = LAMBERT;
+	spheres[1].material.albedo = vec3(0.8f, 0.8f, 0.0f);
 
-	Material ground_sphere_material;
-	ground_sphere_material.type = LAMBERT;
-	ground_sphere_material.albedo = vec3(1.0f, 1.0f, 1.0f);
+	spheres[2].position = vec3(1.0f, 0.0f, -1.0f);
+	spheres[2].radius = 0.5f;
+	spheres[2].material.type = METAL;
+	spheres[2].material.albedo = vec3(0.8f, 0.6f, 0.2f);
+	spheres[2].material.fuzz = 1.0f;
 
-	f32 ground_sphere_radius = 100.0f;
-	v3 ground_sphere_position = vec3(0.0f, -100.5f, -1.0f);
-
-	spheres[0].position = object_sphere_position;
-	spheres[0].radius = object_sphere_radius;
-	spheres[0].material = object_sphere_material;
-
-	spheres[1].position = ground_sphere_position;
-	spheres[1].radius = ground_sphere_radius;
-	spheres[1].material = ground_sphere_material;
+	spheres[3].position = vec3(-1.0f, 0.0f, -1.0f);
+	spheres[3].radius = 0.5f;
+	spheres[3].material.type = METAL;
+	spheres[3].material.albedo = vec3(0.8f, 0.8f, 0.8f);
+	spheres[3].material.fuzz = 0.3f;
 }
 
-void setup_camera(void)
+void setup_camera(f32 vertical_fov, f32 aspect)
 {
-	camera.eye = vec3(0.0f, 0.0f, 0.0f);
-	camera.bottom_left = vec3(-2.0f, -1.0f, -1.0f);
-	camera.horizontal = vec3(4.0f, 0.0f, 0.0f);
-	camera.vertical = vec3(0.0f, 2.0f, 0.0f);
+	f32 theta		= vertical_fov * (3.14159265358979323846f / 180.0f);
+	f32 half_height = tan(theta / 2.0f);
+	f32 half_width	= aspect * half_height;
+
+	camera.position		= vec3(0.0f, 0.0f, -10.0f);
+	camera.bottom_left	= vec3(-half_width, -half_height, -1.0f);
+	camera.horizontal	= vec3(2.0f*half_width, 0.0f, 0.0f);
+	camera.vertical		= vec3(0.0f, 2.0f*half_height, 0.0f);
 }
 
 v3 colour(Ray r)
@@ -440,41 +453,52 @@ v3 colour(Ray r)
 
 	if (intersects_all(r, &h, 0.001f, FLT_MAX))
 	{
-		switch (h.material.type)
+		if (r.bounces < MAX_BOUNCES)
 		{
-			case LAMBERT:
+			switch (h.material.type)
 			{
-				v3 random_unit_vector = random_point_within_magnitude(1.0f);
-				v3 point_pos = v3_add(h.point, h.normal);
-				v3 target = v3_add(point_pos, random_unit_vector);
+				case LAMBERT:
+				{
+					v3 random_unit_vector = random_unit_sphere();
+					v3 point_pos = v3_add(h.point, h.normal);
+					v3 target = v3_add(point_pos, random_unit_vector);
 
-				Ray ray;
-				ray.origin = h.point;
-				ray.direction = v3_sub(target, h.point);
+					Ray ray;
+					ray.origin = h.point;
+					ray.direction = v3_sub(target, h.point);
+					ray.bounces = r.bounces + 1;
 
-				v3 c = colour(ray);
-				v3 lambert = v3_mulv(c, h.material.albedo);
+					v3 c = colour(ray);
+					v3 lambert = v3_mulv(c, h.material.albedo);
 
-				return lambert;
+					return lambert;
+				}
+
+				case METAL:
+				{
+					v3 ray_dir_n = v3_normalized(r.direction);
+					v3 reflected = v3_reflect(ray_dir_n, h.normal);
+					v3 rnd_fuzz = v3_mulf(random_unit_sphere(), h.material.fuzz);
+					v3 final_reflection_dir = v3_add(reflected, rnd_fuzz);
+
+					Ray scattered;
+					scattered.origin = h.point;
+					scattered.direction = final_reflection_dir;
+					scattered.bounces = r.bounces + 1;
+
+					f32 v = v3_dot(scattered.direction, h.normal);
+					v3	c = colour(scattered);
+					v3  calb = v3_mulv(c, h.material.albedo);
+
+					v3 metal = (v > 0.0f) ? calb : vec3(0.0f, 0.0f, 0.0f);
+
+					return metal;
+				}
 			}
-
-			case METAL:
-			{
-				v3 ray_dir_n = v3_normalized(r.direction);
-				v3 reflected = v3_reflect(ray_dir_n, h.normal);
-			
-				Ray scattered; 
-				scattered.origin = h.point;
-				scattered.direction = reflected;
-
-				f32 v = v3_dot(scattered.direction, h.normal);
-				v3	c = colour(scattered);
-				v3  calb = v3_mulv(c, h.material.albedo);
-
-				v3 metal = (v > 0.0f) ? calb : vec3(0.0f, 0.0f, 0.0f);
-
-				return metal;
-			}
+		}
+		else
+		{
+			return vec3(0.0f, 0.0f, 0.0f);
 		}
 	}
 	else
@@ -496,11 +520,11 @@ v3 colour(Ray r)
 
 void setup_bitmap(void)
 {
-	u32 remainder = output_width % 5;
-	u32 row_size = (remainder == 0) ? (output_width * 4) : ((output_width + 4 - remainder) * 4);
+	u32 remainder = OUTPUT_WIDTH % 5;
+	u32 row_size = (remainder == 0) ? (OUTPUT_WIDTH * 4) : ((OUTPUT_WIDTH + 4 - remainder) * 4);
 
 	file_header.type = 0x4d42;
-	file_header.size = (row_size * output_height) + sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader);
+	file_header.size = (row_size * OUTPUT_HEIGHT) + sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader);
 	file_header.res_1 = 0;
 	file_header.res_2 = 0;
 	file_header.offset = sizeof(BitmapFileHeader) + sizeof(BitmapInfoHeader);
@@ -509,89 +533,45 @@ void setup_bitmap(void)
 	bitmap_handle = CreateDIBSection(device_context, (BITMAPINFO*)&file_header, DIB_RGB_COLORS, (void**)&bitmap_image_data, 0, 0);
 
 	info_header.size = sizeof(BitmapInfoHeader);
-	info_header.width = output_width;
-	info_header.height = output_height;
+	info_header.width = OUTPUT_WIDTH;
+	info_header.height = OUTPUT_HEIGHT;
 	info_header.planes = 1;
 	info_header.bits = 32;
 	info_header.compression = 0;
-	info_header.image_size = row_size * output_height;
+	info_header.image_size = row_size * OUTPUT_HEIGHT;
 	info_header.x_resolution = 0;
 	info_header.y_resolution = 0;
 	info_header.colours = 0;
 	info_header.colours_important = 0;
 
-	bitmap_image_data = (u8*)_aligned_malloc(info_header.image_size, 64);
+	bitmap_image_data = _aligned_malloc(info_header.image_size, 64);
 }
 
 void render_pixel(u32 x, u32 y)
 {
-	v3	col;
-	col.x = 0.0f;
-	col.y = 0.0f;
-	col.z = 0.0f;
+	v3	col = vec3(0.0f, 0.0f, 0.0f);
 
-	u32	num_aa_samples = 8;
-
-	switch (AA_SAMPLESTYLE)
+	for (s16 sample = 0; sample < NUM_AA_SAMPLES; sample++)
 	{
-	case AA_SAMPLESTYLE_GRID:
-	{
-		f32 x_inc = 1.0f / ssx_samples;
-		f32 y_inc = 1.0f / ssy_samples;
+		f32 u = (x + ((f32)rand() / (RAND_MAX))) / (f32)OUTPUT_WIDTH;
+		f32 v = (y + ((f32)rand() / (RAND_MAX))) / (f32)OUTPUT_HEIGHT;
 
-		num_aa_samples = ssx_samples * ssy_samples;
+		Ray r = get_ray(camera, u, v);
 
-		for (s16 ssy = 0; ssy < ssy_samples; ssy++)
-		{
-			for (s16 ssx = 0; ssx < ssx_samples; ssx++)
-			{
-				f32 u = (f32)(x + (x_inc * ssx)) / (f32)output_width;
-				f32 v = (f32)(y + (y_inc * ssy)) / (f32)output_height;
-
-				Ray r = get_ray(camera, u, v);
-
-				v3 c = colour(r);
-				col.x += c.x;
-				col.y += c.y;
-				col.z += c.z;
-			}
-		}
+		v3 c = colour(r);
+		col.x += c.x;
+		col.y += c.y;
+		col.z += c.z;
 	}
-
-	case AA_SAMPLESTYLE_RANDOM:
-	{
-		f32 x_inc = 1.0f / ssx_samples;
-		f32 y_inc = 1.0f / ssy_samples;
-
-		col.x = 0.0f;
-		col.y = 0.0f;
-		col.z = 0.0f;
-
-		num_aa_samples = rnd_samples;
-
-		for (s16 sample = 0; sample < num_aa_samples; sample++)
-		{
-			f32 u = (x + ((f32)rand() / (RAND_MAX))) / (f32)output_width;
-			f32 v = (y + ((f32)rand() / (RAND_MAX))) / (f32)output_height;
-
-			Ray r = get_ray(camera, u, v);
-
-			v3 c = colour(r);
-			col.x += c.x;
-			col.y += c.y;
-			col.z += c.z;
-		}
-	}
-	}
-
-	v3 final = v3_div(col, (f32)num_aa_samples);
+	
+	v3 final = v3_div(col, (f32) NUM_AA_SAMPLES);
 
 	u8 red = (int)(255.99 * sqrt(final.x));
 	u8 grn = (int)(255.99 * sqrt(final.y));
 	u8 blu = (int)(255.99 * sqrt(final.z));
 	u8 res = (int)0;
 
-	int bitmap_index = ((y * output_width) + x) * 4;
+	int bitmap_index = ((y * OUTPUT_WIDTH) + x) * 4;
 
 	bitmap_image_data[bitmap_index + 0] = blu;
 	bitmap_image_data[bitmap_index + 1] = grn;
@@ -601,9 +581,9 @@ void render_pixel(u32 x, u32 y)
 
 void render(u16 offset, u16 inc)
 {
-	for (s16 y = offset; y < output_height; y += inc)
+	for (s16 y = offset; y < OUTPUT_HEIGHT; y += inc)
 	{
-		for (s16 x = 0; x < output_width; x++)
+		for (s16 x = 0; x < OUTPUT_WIDTH; x++)
 		{
 			render_pixel(x, y);
 		}
@@ -670,23 +650,28 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 	DWORD dwStyle = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
 
-	hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, class_name, class_name, dwStyle, CW_USEDEFAULT, CW_USEDEFAULT, output_width, output_height + 43, NULL, NULL, h_instance, NULL);
+	hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, class_name, class_name, dwStyle, CW_USEDEFAULT, CW_USEDEFAULT, OUTPUT_WIDTH, OUTPUT_HEIGHT + 43, NULL, NULL, h_instance, NULL);
 
 	if (!hwnd) return 0;
 
 	ShowWindow(hwnd, cmd_show);
 	UpdateWindow(hwnd);
 
-	setup_camera();
+	setup_camera(V_FOV, ASPECT);
 	setup_scene();
 	setup_bitmap();
 
 	SYSTEM_INFO system_info;
 	GetSystemInfo(&system_info);
 
-	u16 cpu_count = MULTITHREADING ? system_info.dwNumberOfProcessors : 1;
-	u32* render_thread_data = (u32*)malloc(cpu_count * sizeof(u32));
-	HANDLE* render_threads = (HANDLE*)malloc(cpu_count * sizeof(HANDLE));
+	u16 cpu_count = 1; 
+
+	#ifdef MULTITHREADED
+	cpu_count = system_info.dwNumberOfProcessors;
+	#endif // MULTITHREADED
+
+	u32* render_thread_data = malloc(cpu_count * sizeof(u32));
+	HANDLE* render_threads = malloc(cpu_count * sizeof(HANDLE));
 	clock_t start, end;
 	f64 cpu_time_used;
 
@@ -726,7 +711,9 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 				sprintf(s, "Finished in %f", cpu_time_used);
 
-				if (FINISHED_MESSAGE) MessageBox(NULL, s, "Renderer", MB_ICONEXCLAMATION | MB_OK);
+				#ifdef FINISHED_MESSAGE
+					MessageBox(NULL, s, "Renderer", MB_ICONEXCLAMATION | MB_OK);
+				#endif 
 
 				STATE = IDLE;
 			}

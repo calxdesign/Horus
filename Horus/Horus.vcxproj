@@ -89,6 +89,9 @@
       <MultiProcessorCompilation>false</MultiProcessorCompilation>
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
