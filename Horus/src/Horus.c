@@ -350,13 +350,15 @@ u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 
 u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 {
-	Hit	 temp;
-	u32  hit_something = 0;
-	f32  closest = t_max;
+	Hit		temp;
+	u32		hit_something = 0;
+	f32		closest = t_max;
 
-	for (u32 i = 0; i < NUM_SPHERES; i++)
+	Sphere* sphere_end = &spheres[NUM_SPHERES];
+	
+	for (Sphere* sphere = spheres; sphere != sphere_end; ++sphere)
 	{
-		if (intersection(&r, spheres[i], &temp, t_min, closest))
+		if (intersection(&r, *sphere, &temp, t_min, closest))
 		{
 			hit_something = 1;
 			closest = temp.t;
@@ -364,7 +366,7 @@ u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 			h->t = temp.t;
 			h->point = temp.point;
 			h->normal = temp.normal;
-			h->material = spheres[i].material;
+			h->material = sphere->material;
 		}
 	}
 
