@@ -42,14 +42,15 @@ typedef double				  f64;
 
 #define MULTITHREADED			
 //#define FINISHED_MESSAGE		
-//300
+
+#define NUM_COLOURS				5
 #define	NUM_SPHERES 			20
-#define NUM_AA_SAMPLES 			1
-#define OUTPUT_WIDTH			800
-#define OUTPUT_HEIGHT			400
+#define NUM_AA_SAMPLES 			64
+#define OUTPUT_WIDTH			1000
+#define OUTPUT_HEIGHT			500
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
 #define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
-#define V_FOV					70
+#define V_FOV					40
 #define	RENDER					0
 #define	IDLE					1
 #define OUTPUT					0
@@ -150,6 +151,7 @@ typedef struct Hit
 
 static HWND						hwnd;
 static Sphere*					spheres;
+static v3*						palette;
 static u8*						bitmap_image_data;
 static HBITMAP					bitmap_handle;
 static HDC						device_context;
@@ -453,7 +455,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	return 0;
 }
 
-v3 get_colour_from_pallette(f32 x, f32 y, f32 z)
+v3 get_random_colour_in_hue(f32 x, f32 y, f32 z)
 {
 	v3 c = vec3(0.0f, 0.0f, 0.0f);
 	c.x = x * (0.392);
@@ -564,6 +566,26 @@ v3 colour(Ray r)
 	}
 }
 
+void setup_pallete(void)
+{
+	palette = malloc(NUM_COLOURS * sizeof(v3));
+
+	palette[0] = vec3(85.0f  / 255.0f, 98.0f  / 255.0f, 112.0f / 255.0f);
+	palette[1] = vec3(78.0f  / 255.0f, 205.0f / 255.0f, 198.0f / 255.0f);
+	palette[2] = vec3(199.0f / 255.0f, 244.0f / 255.0f, 100.0f / 255.0f);
+	palette[3] = vec3(255.0f / 255.0f, 107.0f / 255.0f, 107.0f / 255.0f);
+	palette[4] = vec3(198.0f / 255.0f,  77.0f / 255.0f,  88.0f / 255.0f);
+
+	return;
+}
+
+v3 get_random_colour_in_pallete(void)
+{
+	u32 index = (u32) (nrand() * NUM_COLOURS);
+
+	return palette[index];
+}
+
 void setup_scene(void)
 {
 
@@ -577,14 +599,17 @@ void setup_scene(void)
 	{
 		if (count == NUM_SPHERES) break;
 
-		srand(index++);
+		srand(index+=11);
 
-		spheres[count].radius = (nrand() * 100.5f) + 0.05f;
+		spheres[count].radius = (nrand() * 80.5f) + 0.05f;
 		spheres[count].position.x = (nrand() * 50.0f) - 25.0f;
 		spheres[count].position.y = spheres[count].radius;
-		spheres[count].position.z = (nrand() * 40.0f) - 2.0f;
-		spheres[count].material.type = (nrand() > 0.7f ? METAL : LAMBERT);
-		spheres[count].material.albedo = get_colour_from_pallette(nrand(), ((f32)rand() / (RAND_MAX)), ((f32)rand() / (RAND_MAX)));
+		spheres[count].position.z = (nrand() * 50.0f) - 25.0f;
+		spheres[count].material.type = (nrand() > 0.75f ? METAL : LAMBERT);
+
+		f32 brightness = nrand();
+
+		spheres[count].material.albedo = spheres[count].material.type == METAL ? vec3(brightness, brightness, brightness) : get_random_colour_in_pallete();
 		spheres[count].material.fuzz = nrand();
 
 		int overlap = 0;
@@ -687,7 +712,7 @@ DWORD WINAPI PaintThread(void* data)
 	while (1)
 	{
 		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE);
-		Sleep(30);
+		Sleep(6000);
 	}
 
 	return 0;
@@ -753,15 +778,14 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	v3 cam_target = vec3(CAM_TARGET_X, CAM_TARGET_Y, CAM_TARGET_Z);
 	v3 world_up = vec3(0.0f, 1.0f, 0.0f);
 	v3 cam_direction = v3_sub(cam_position, cam_target);
-	f32 cam_focal_dist = 3.0f; //v3_mag(cam_direction);
+	f32 cam_focal_dist = v3_mag(cam_direction);
 
 	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist);
 
-	
-
+	setup_pallete();
 	setup_scene();
 	setup_bitmap();
-
+	
 	SYSTEM_INFO system_info;
 	GetSystemInfo(&system_info);
 
