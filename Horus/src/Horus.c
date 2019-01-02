@@ -40,6 +40,28 @@ typedef unsigned long long    u64;
 typedef float				  f32;
 typedef double				  f64;
 
+#define MULTITHREADED			
+//#define FINISHED_MESSAGE		
+//300
+#define	NUM_SPHERES 			20
+#define NUM_AA_SAMPLES 			1
+#define OUTPUT_WIDTH			800
+#define OUTPUT_HEIGHT			400
+#define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
+#define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
+#define V_FOV					70
+#define	RENDER					0
+#define	IDLE					1
+#define OUTPUT					0
+#define MAX_BOUNCES				50
+#define CAM_POS_X				0.40f
+#define CAM_POS_Y				2.65f
+#define CAM_POS_Z			   -4.45f
+#define CAM_TARGET_X			0.00f
+#define CAM_TARGET_Y			2.50f
+#define CAM_TARGET_Z			-1.00f
+#define CAM_APERTURE			0.10f
+
 typedef enum MaterialType
 {
 	METAL, LAMBERT
@@ -106,10 +128,14 @@ typedef struct Sphere
 
 typedef struct Camera
 {
-	v3 bottom_left;
-	v3 position;
-	v3 horizontal;
-	v3 vertical;
+	v3  bottom_left;
+	v3  position;
+	v3  horizontal;
+	v3  vertical;
+	f32 lens_radius;
+	v3 u;
+	v3 v;
+	v3 w;
 
 } Camera;
 
@@ -121,21 +147,6 @@ typedef struct Hit
 	Material	material;
 
 } Hit;
-
-#define MULTITHREADED			
-//#define FINISHED_MESSAGE		
-
-#define	NUM_SPHERES 			4
-#define NUM_AA_SAMPLES 			127
-#define OUTPUT_WIDTH			800
-#define OUTPUT_HEIGHT			400
-#define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
-#define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
-#define V_FOV					87
-#define	RENDER					0
-#define	IDLE					1
-#define OUTPUT					0
-#define MAX_BOUNCES				50
 
 static HWND						hwnd;
 static Sphere*					spheres;
@@ -267,17 +278,42 @@ f32 v3_squared_length(v3 a)
 	return (a.x*a.x + a.y * a.y + a.z * a.z);
 }
 
-Ray get_ray(Camera cam, f32 u, f32 v)
+f32 nrand()
 {
+	return ((f32)rand() / (RAND_MAX));
+}
+
+Ray get_ray(Camera* cam, f32 s, f32 t)
+{
+	v3 lens_ray_offset = vec3(0.0f, 0.0f, 0.0f);
+
+	while (1)
+	{
+		v3 pos = vec3(nrand(), nrand(), 0.0f);
+		v3 offset = vec3(1.0f, 1.0f, 0.0f);
+		v3 point = v3_sub(pos, offset);
+		v3 lens_point = v3_mulf(point, 2.0f);
+
+		if (v3_dot(lens_point, lens_point) < 1.0f)
+		{
+			lens_ray_offset = v3_mulf(lens_point, cam->lens_radius);
+			break;
+		}
+	}
+
+	v3 ray_origin_offset_u = v3_mulf(cam->u, lens_ray_offset.x);
+	v3 ray_origin_offset_v = v3_mulf(cam->v, lens_ray_offset.y);
+	v3 final_ray_origin_offset = v3_add(ray_origin_offset_u, ray_origin_offset_v);
+
 	Ray ray;
-	ray.origin = cam.position;
+	ray.origin = v3_add(cam->position, final_ray_origin_offset);
 
-	v3 u_norm = v3_mulf(cam.horizontal, u);
-	v3 v_norm = v3_mulf(cam.vertical, v);
+	v3 u_norm = v3_mulf(cam->horizontal, s);
+	v3 v_norm = v3_mulf(cam->vertical, t);
 	v3 uv_norm = v3_add(u_norm, v_norm);
-	v3 uv_cam = v3_add(uv_norm, cam.bottom_left);
+	v3 uv_cam = v3_add(uv_norm, cam->bottom_left);
 
-	ray.direction = v3_sub(uv_cam, cam.position);
+	ray.direction = v3_sub(uv_cam, ray.origin);
 	ray.bounces = 0;
 
 	return ray;
@@ -298,15 +334,11 @@ void save_file(void)
 	fclose(file);
 }
 
-v3 random_unit_sphere()
+v3 random_unit_sphere(void)
 {
 	while (1)
 	{
-		v3 pos;
-		pos.x = ((f32)rand() / (RAND_MAX));
-		pos.y = ((f32)rand() / (RAND_MAX));
-		pos.z = ((f32)rand() / (RAND_MAX));
-
+		v3 pos = vec3(nrand(), nrand(), nrand());
 		v3 point = v3_mulf(pos, 2.0f);
 		v3 unit = vec3(1.0f, 1.0f, 1.0f);
 		v3 final = v3_sub(point, unit);
@@ -421,61 +453,51 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	return 0;
 }
 
-void setup_scene(void)
+v3 get_colour_from_pallette(f32 x, f32 y, f32 z)
 {
-	spheres = malloc(NUM_SPHERES * sizeof(Sphere));
+	v3 c = vec3(0.0f, 0.0f, 0.0f);
+	c.x = x * (0.392);
+	c.y = x * (0.627 + (y * 0.176));
+	c.z = x * (0.392 + (z * 0.607));
 
-	spheres[0].position = vec3(0.0f,  0.0f, -1.0f);
-	spheres[0].radius = 0.5f;
-	spheres[0].material.type = LAMBERT;
-	spheres[0].material.albedo = vec3(0.8f, 0.3f, 0.3f);
-
-	spheres[1].position = vec3(0.0f, -100.5f, -1.0f);
-	spheres[1].radius = 100.0f;
-	spheres[1].material.type = LAMBERT;
-	spheres[1].material.albedo = vec3(0.8f, 0.8f, 0.0f);
-
-	spheres[2].position = vec3(1.0f, 0.0f, -1.0f);
-	spheres[2].radius = 0.5f;
-	spheres[2].material.type = METAL;
-	spheres[2].material.albedo = vec3(0.8f, 0.6f, 0.2f);
-	spheres[2].material.fuzz = 1.0f;
-
-	spheres[3].position = vec3(-1.0f, 0.0f, -1.0f);
-	spheres[3].radius = 0.5f;
-	spheres[3].material.type = METAL;
-	spheres[3].material.albedo = vec3(0.8f, 0.8f, 0.8f);
-	spheres[3].material.fuzz = 0.3f;
+	return c;
 }
 
-void setup_camera(v3 pos, v3 target, v3 up, f32 vertical_fov, f32 aspect)
+
+void setup_camera(Camera* camera, v3 pos, v3 target, v3 up, f32 vertical_fov, f32 aspect, f32 aperture, f32 focus_distance)
 {
+	camera->lens_radius = aperture / 2.0f;
+
 	f32 theta		= vertical_fov * (3.14159265358979323846f / 180.0f);
 	f32 half_height = tan(theta / 2.0f);
 	f32 half_width	= aspect * half_height;
 
-	camera.position = pos;
+	camera->position = pos;
 
 	v3	dir = v3_sub(pos, target);
-	v3	w = v3_normalized(dir);
-	v3	cp_dir = v3_cross(up, w);
-	v3	u = v3_normalized(cp_dir);
-	v3	v = v3_cross(w, u);
-	v3 hwu	= v3_mulf(u, half_width);
-	v3 hhv	= v3_mulf(v, half_height);
-	v3 ht	= v3_add(hwu, hhv);
-	v3 htw	= v3_add(ht, w);
+	camera->w = v3_normalized(dir);
 
-	camera.bottom_left	= v3_sub(pos, htw);
-	camera.horizontal	= v3_mulf(u, 2.0f*half_width);
-	camera.vertical		= v3_mulf(v, 2.0f*half_height);
+	v3	cp_dir = v3_cross(up, camera->w);
+	camera->u  = v3_normalized(cp_dir);
+
+	camera->v  = v3_cross(camera->w, camera->u);
+
+	v3	hwu	  = v3_mulf(camera->u, half_width*focus_distance);
+	v3	hhv	  = v3_mulf(camera->v, half_height*focus_distance);
+	v3	ht    = v3_add(hwu, hhv);
+	v3  fdw   = v3_mulf(camera->w, focus_distance);
+	v3	total = v3_add(ht, fdw);
+
+	camera->bottom_left	= v3_sub(pos, total);
+	camera->horizontal	= v3_mulf(camera->u, 2.0f*focus_distance*half_width);
+	camera->vertical	= v3_mulf(camera->v, 2.0f*focus_distance*half_height);
 }
 
 v3 colour(Ray r)
 {
 	Hit h;
 
-	if (intersects_all(r, &h, 0.001f, FLT_MAX))
+	if (intersects_all(r, &h, 0.001f, 50.0f))
 	{
 		if (r.bounces < MAX_BOUNCES)
 		{
@@ -542,6 +564,52 @@ v3 colour(Ray r)
 	}
 }
 
+void setup_scene(void)
+{
+
+	spheres = malloc(NUM_SPHERES * sizeof(Sphere));
+
+	u32 overlap = 0;
+	u32 count = 1;
+	u32 index = 0;
+
+	while (1)
+	{
+		if (count == NUM_SPHERES) break;
+
+		srand(index++);
+
+		spheres[count].radius = (nrand() * 100.5f) + 0.05f;
+		spheres[count].position.x = (nrand() * 50.0f) - 25.0f;
+		spheres[count].position.y = spheres[count].radius;
+		spheres[count].position.z = (nrand() * 40.0f) - 2.0f;
+		spheres[count].material.type = (nrand() > 0.7f ? METAL : LAMBERT);
+		spheres[count].material.albedo = get_colour_from_pallette(nrand(), ((f32)rand() / (RAND_MAX)), ((f32)rand() / (RAND_MAX)));
+		spheres[count].material.fuzz = nrand();
+
+		int overlap = 0;
+
+		for (int i = 0; i < count; ++i)
+		{
+			v3  dir = v3_sub(spheres[count].position, spheres[i].position);
+			f32 dis = v3_mag(dir);
+
+			if (dis < spheres[count].radius + spheres[i].radius)
+			{
+				overlap = 1;
+				break;
+			}
+		}
+
+		if (overlap == 0) count++;
+	}
+
+	spheres[0].position = vec3(0.0f, -100000.0f, -0.0f);
+	spheres[0].radius = 100000.0f;
+	spheres[0].material.type = LAMBERT;
+	spheres[0].material.albedo = vec3(0.5f, 0.5f, 0.5f);
+}
+
 void setup_bitmap(void)
 {
 	u32 remainder = OUTPUT_WIDTH % 5;
@@ -577,10 +645,10 @@ void render_pixel(u32 x, u32 y)
 
 	for (s16 sample = 0; sample < NUM_AA_SAMPLES; sample++)
 	{
-		f32 u = (x + ((f32)rand() / (RAND_MAX))) / (f32)OUTPUT_WIDTH;
-		f32 v = (y + ((f32)rand() / (RAND_MAX))) / (f32)OUTPUT_HEIGHT;
+		f32 u = (x + nrand()) / (f32)OUTPUT_WIDTH;
+		f32 v = (y + nrand()) / (f32)OUTPUT_HEIGHT;
 
-		Ray r = get_ray(camera, u, v);
+		Ray r = get_ray(&camera, u, v);
 
 		v3 c = colour(r);
 		col.x += c.x;
@@ -681,11 +749,16 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	ShowWindow(hwnd, cmd_show);
 	UpdateWindow(hwnd);
 
-	v3 cam_position = vec3(-2.0f, 1.0f, 1.0f);
-	v3 cam_target = vec3(0.0f, 0.0f, -1.0f);
+	v3 cam_position = vec3(CAM_POS_X, CAM_POS_Y, CAM_POS_Z);
+	v3 cam_target = vec3(CAM_TARGET_X, CAM_TARGET_Y, CAM_TARGET_Z);
 	v3 world_up = vec3(0.0f, 1.0f, 0.0f);
+	v3 cam_direction = v3_sub(cam_position, cam_target);
+	f32 cam_focal_dist = 3.0f; //v3_mag(cam_direction);
 
-	setup_camera(cam_position, cam_target, world_up, V_FOV, ASPECT);
+	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist);
+
+	
+
 	setup_scene();
 	setup_bitmap();
 
