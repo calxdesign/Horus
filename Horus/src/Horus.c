@@ -223,6 +223,17 @@ v3 v3_sub(v3 a, v3 b)
 	return v;
 }
 
+v3 v3_cross(v3 a, v3 b)
+{
+	v3 v;
+
+	v.x = a.y * b.z - b.y * a.z;
+	v.y = a.z * b.x - b.z * a.x;
+	v.z = a.x * b.y - b.x * a.y;
+
+	return v;
+}
+
 v3 v3_add(v3 a, v3 b)
 {
 	v3 v;
@@ -437,16 +448,27 @@ void setup_scene(void)
 	spheres[3].material.fuzz = 0.3f;
 }
 
-void setup_camera(f32 vertical_fov, f32 aspect)
+void setup_camera(v3 pos, v3 target, v3 up, f32 vertical_fov, f32 aspect)
 {
 	f32 theta		= vertical_fov * (3.14159265358979323846f / 180.0f);
 	f32 half_height = tan(theta / 2.0f);
 	f32 half_width	= aspect * half_height;
 
-	camera.position		= vec3(0.0f, 0.0f, -10.0f);
-	camera.bottom_left	= vec3(-half_width, -half_height, -1.0f);
-	camera.horizontal	= vec3(2.0f*half_width, 0.0f, 0.0f);
-	camera.vertical		= vec3(0.0f, 2.0f*half_height, 0.0f);
+	camera.position = pos;
+
+	v3	dir = v3_sub(pos, target);
+	v3	w = v3_normalized(dir);
+	v3	cp_dir = v3_cross(up, w);
+	v3	u = v3_normalized(cp_dir);
+	v3	v = v3_cross(w, u);
+	v3 hwu	= v3_mulf(u, half_width);
+	v3 hhv	= v3_mulf(v, half_height);
+	v3 ht	= v3_add(hwu, hhv);
+	v3 htw	= v3_add(ht, w);
+
+	camera.bottom_left	= v3_sub(pos, htw);
+	camera.horizontal	= v3_mulf(u, 2.0f*half_width);
+	camera.vertical		= v3_mulf(v, 2.0f*half_height);
 }
 
 v3 colour(Ray r)
@@ -659,7 +681,11 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	ShowWindow(hwnd, cmd_show);
 	UpdateWindow(hwnd);
 
-	setup_camera(V_FOV, ASPECT);
+	v3 cam_position = vec3(-2.0f, 1.0f, 1.0f);
+	v3 cam_target = vec3(0.0f, 0.0f, -1.0f);
+	v3 world_up = vec3(0.0f, 1.0f, 0.0f);
+
+	setup_camera(cam_position, cam_target, world_up, V_FOV, ASPECT);
 	setup_scene();
 	setup_bitmap();
 
