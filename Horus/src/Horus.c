@@ -41,26 +41,27 @@ typedef float				  f32;
 typedef double				  f64;
 
 #define MULTITHREADED			
-//#define FINISHED_MESSAGE		
+#define FINISHED_MESSAGE		
+#define OUTPUT					
 
 #define NUM_COLOURS				5
-#define	NUM_SPHERES 			20
-#define NUM_AA_SAMPLES 			64
-#define OUTPUT_WIDTH			1000
-#define OUTPUT_HEIGHT			500
+#define	NUM_SPHERES 			30 // 300
+#define NUM_AA_SAMPLES 			2 // 128
+#define OUTPUT_WIDTH			400
+#define OUTPUT_HEIGHT			200
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
 #define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
-#define V_FOV					40
+#define V_FOV					50
 #define	RENDER					0
 #define	IDLE					1
-#define OUTPUT					0
+
 #define MAX_BOUNCES				50
-#define CAM_POS_X				0.40f
-#define CAM_POS_Y				2.65f
+#define CAM_POS_X				0.00f
+#define CAM_POS_Y				1.65f
 #define CAM_POS_Z			   -4.45f
 #define CAM_TARGET_X			0.00f
-#define CAM_TARGET_Y			2.50f
-#define CAM_TARGET_Z			-1.00f
+#define CAM_TARGET_Y			1.00f
+#define CAM_TARGET_Z			0.00f
 #define CAM_APERTURE			0.10f
 
 typedef enum MaterialType
@@ -282,7 +283,7 @@ f32 v3_squared_length(v3 a)
 
 f32 nrand()
 {
-	return ((f32)rand() / (RAND_MAX));
+	return ((f32)rand() / ((f32) RAND_MAX));
 }
 
 Ray get_ray(Camera* cam, f32 s, f32 t)
@@ -323,8 +324,6 @@ Ray get_ray(Camera* cam, f32 s, f32 t)
 
 void save_file(void)
 {
-	if (!OUTPUT) return;
-
 	FILE* file = fopen("D:\\Root\\Horus\\Renders\\output.bmp", "wb");
 
 	if (!file) return;
@@ -591,42 +590,43 @@ void setup_scene(void)
 
 	spheres = malloc(NUM_SPHERES * sizeof(Sphere));
 
-	u32 overlap = 0;
-	u32 count = 1;
-	u32 index = 0;
+	u32 sphere_count = 1;
 
 	while (1)
 	{
-		if (count == NUM_SPHERES) break;
+		if (sphere_count == NUM_SPHERES) break;
 
-		srand(index+=11);
-
-		spheres[count].radius = (nrand() * 80.5f) + 0.05f;
-		spheres[count].position.x = (nrand() * 50.0f) - 25.0f;
-		spheres[count].position.y = spheres[count].radius;
-		spheres[count].position.z = (nrand() * 50.0f) - 25.0f;
-		spheres[count].material.type = (nrand() > 0.75f ? METAL : LAMBERT);
+		spheres[sphere_count].radius = (nrand() * 1.05f) + 0.05f;
+		spheres[sphere_count].position.x = (nrand() * 15.0f) - 7.5f;
+		spheres[sphere_count].position.y = spheres[sphere_count].radius;
+		spheres[sphere_count].position.z = (nrand() * 10.0f);
+		spheres[sphere_count].material.type = (nrand() > 0.75f ? METAL : LAMBERT);
 
 		f32 brightness = nrand();
 
-		spheres[count].material.albedo = spheres[count].material.type == METAL ? vec3(brightness, brightness, brightness) : get_random_colour_in_pallete();
-		spheres[count].material.fuzz = nrand();
+		spheres[sphere_count].material.albedo = spheres[sphere_count].material.type == METAL ? vec3(brightness, brightness, brightness) : get_random_colour_in_pallete();
+		spheres[sphere_count].material.fuzz = nrand() * 0.25;
 
-		int overlap = 0;
+		int dismiss = 0;
 
-		for (int i = 0; i < count; ++i)
+		f32 inner = 03.0f;
+		f32 outer = 10.0f;
+
+		for (int i = 0; i < sphere_count; ++i)
 		{
-			v3  dir = v3_sub(spheres[count].position, spheres[i].position);
+			v3  dir = v3_sub(spheres[sphere_count].position, spheres[i].position);
 			f32 dis = v3_mag(dir);
+			v3  dir_to_sphere = v3_sub(spheres[sphere_count].position, camera.position);
+			f32 distance_to_cam = v3_mag(dir_to_sphere);
 
-			if (dis < spheres[count].radius + spheres[i].radius)
+			if (dis < (spheres[sphere_count].radius + spheres[i].radius) || distance_to_cam < inner || distance_to_cam > outer)
 			{
-				overlap = 1;
+				dismiss = 1;
 				break;
 			}
 		}
 
-		if (overlap == 0) count++;
+		if (dismiss == 0) sphere_count++;
 	}
 
 	spheres[0].position = vec3(0.0f, -100000.0f, -0.0f);
@@ -712,7 +712,7 @@ DWORD WINAPI PaintThread(void* data)
 	while (1)
 	{
 		RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE);
-		Sleep(6000);
+		Sleep(60);
 	}
 
 	return 0;
@@ -830,15 +830,18 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 				TerminateThread(window_thread, 0);
 
-				cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+				cpu_time_used = ((f64)(end - start)) / CLOCKS_PER_SEC;
 
-				char s[32];
+				u8 s[32];
 
-				sprintf(s, "Finished in %f", cpu_time_used);
+				#ifdef OUTPUT
+				save_file();
+				#endif // OUTPUT
 
 				#ifdef FINISHED_MESSAGE
+					sprintf(s, "Finished in %f", cpu_time_used);
 					MessageBox(NULL, s, "Renderer", MB_ICONEXCLAMATION | MB_OK);
-				#endif 
+				#endif // FINISHED_MESSAGE
 
 				STATE = IDLE;
 			}
