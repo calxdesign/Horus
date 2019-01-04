@@ -46,15 +46,15 @@ typedef double				  f64;
 
 #define NUM_COLOURS				5
 #define	NUM_SPHERES 			96	
-#define NUM_AA_SAMPLES 			256	
-#define OUTPUT_WIDTH			2048
-#define OUTPUT_HEIGHT			1024
+#define NUM_AA_SAMPLES 			1	
+#define OUTPUT_WIDTH			200
+#define OUTPUT_HEIGHT			100
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
 #define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
 #define V_FOV					50
 #define	RENDER					0
 #define	IDLE					1
-#define SEED					808
+//#define SEED					808
 
 #define MAX_BOUNCES				50
 #define CAM_POS_X				0.00f
@@ -170,8 +170,23 @@ static BitmapFileHeader			file_header;
 static BitmapInfoHeader			info_header;
 static Camera					camera;
 static u8						STATE = RENDER;
+static s32						SEED;
+static char						path[128];
 
 const char class_name[] = "BerkTracer";
+
+
+
+
+f32 fract(f32 x)
+{
+	return x - (s64)x;
+}
+
+f32 hash(f32 x)
+{
+	return abs(fract(sin(x) * 43758.5453));
+}
 
 f32 ffmin(f32 a, f32 b)
 {
@@ -343,7 +358,19 @@ Ray get_ray(Camera* cam, f32 s, f32 t)
 
 void save_file(void)
 {
-	FILE* file = fopen("D:\\Root\\Horus\\Renders\\output.bmp", "wb");
+	char* system_path = "D:\\Root\\Horus_Renders\\";
+	char* prefix = "render_";
+	char* suffix = ".bmp";
+
+	sprintf(path, "%s%i%s", system_path, SEED, "\\");
+
+	_mkdir(path);
+
+	char filepath_and_name[128];
+
+	sprintf(filepath_and_name, "%s%s%s%i%s", path, "\\", prefix, SEED, suffix);
+
+	FILE* file = fopen(filepath_and_name, "wb");
 
 	if (!file) return;
 
@@ -491,7 +518,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM w_param, LPARAM l_param)
 	}
 		break;
 	case WM_CLOSE:
-		save_file();
 		DestroyWindow(hwnd);
 		break;
 	case WM_DESTROY:
@@ -816,7 +842,13 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 {
 	WNDCLASSEX wc;
 	MSG msg;
+
+	time_t t = time(NULL);
+	struct tm tm = *localtime(&t);
+	SEED = tm.tm_hour * tm.tm_min * tm.tm_sec;
+
 	srand(SEED);
+
 	v3 first;
 	first.x = 1.0f;
 	first.y = 1.0f;
@@ -868,6 +900,8 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	setup_scene();
 	setup_bitmap();
 	
+
+
 	SYSTEM_INFO system_info;
 	GetSystemInfo(&system_info);
 
