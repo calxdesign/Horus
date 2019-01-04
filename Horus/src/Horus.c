@@ -45,28 +45,29 @@ typedef double				  f64;
 #define OUTPUT					
 
 #define NUM_COLOURS				5
-#define	NUM_SPHERES 			30 // 300
-#define NUM_AA_SAMPLES 			2 // 128
-#define OUTPUT_WIDTH			400
-#define OUTPUT_HEIGHT			200
+#define	NUM_SPHERES 			96	
+#define NUM_AA_SAMPLES 			256	
+#define OUTPUT_WIDTH			2048
+#define OUTPUT_HEIGHT			1024
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
 #define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
 #define V_FOV					50
 #define	RENDER					0
 #define	IDLE					1
+#define SEED					808
 
 #define MAX_BOUNCES				50
 #define CAM_POS_X				0.00f
-#define CAM_POS_Y				1.65f
-#define CAM_POS_Z			   -4.45f
+#define CAM_POS_Y				1.10f
+#define CAM_POS_Z			   -1.95f
 #define CAM_TARGET_X			0.00f
-#define CAM_TARGET_Y			1.00f
+#define CAM_TARGET_Y			0.47f
 #define CAM_TARGET_Z			0.00f
-#define CAM_APERTURE			0.10f
+#define CAM_APERTURE			0.20f
 
 typedef enum MaterialType
 {
-	METAL, LAMBERT
+	METAL, LAMBERT, CHECKER, LIGHT
 
 } MaterialType;
 
@@ -116,6 +117,7 @@ typedef struct Material
 {
 	MaterialType type;
 	v3			 albedo;
+	f32			 intensity;
 	f32			 fuzz;
 
 } Material;
@@ -150,6 +152,13 @@ typedef struct Hit
 
 } Hit;
 
+typedef struct AABB 
+{
+	v3 min;
+	v3 max;
+
+} AABB;
+
 static HWND						hwnd;
 static Sphere*					spheres;
 static v3*						palette;
@@ -163,6 +172,16 @@ static Camera					camera;
 static u8						STATE = RENDER;
 
 const char class_name[] = "BerkTracer";
+
+f32 ffmin(f32 a, f32 b)
+{
+	return a < b ? a : b;
+}
+
+f32 ffmax(f32 a, f32 b)
+{
+	return a > b ? a : b;
+}
 
 f32 v3_dot(v3 a, v3 b)
 {
@@ -351,6 +370,35 @@ v3 random_unit_sphere(void)
 	}
 }
 
+u32 aabb_hit(Ray* ray, AABB* aabb, f32 t_min, f32 t_max)
+{
+	f32* ray_direction	= &ray->direction;
+	f32* ray_origin		= &ray->origin;
+	f32* aabb_min		= &aabb->min;
+	f32* aabb_max		= &aabb->max;
+
+	for (u8 axis = 0; axis < 3; axis++)
+	{
+		f32 inv_d	= 1.0f / ray_direction[axis];
+		f32 t_0		= (aabb_min[axis] - ray_origin[axis]) * inv_d;
+		f32 t_1		= (aabb_max[axis] - ray_origin[axis]) * inv_d;
+
+		if (inv_d < 0.0f)
+		{
+			f32 temp	= t_0;
+			f32 t_0		= t_1;
+			f32 t_1		= temp;
+		}
+
+		t_min = t_0 > t_min ? t_0 : t_min;
+		t_max = t_1 > t_max ? t_1 : t_max;
+
+		if (t_max <= t_min) return 0;
+	}
+
+	return 1;
+}
+
 u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 {
 	v3	i  = v3_sub(r->origin, s.position);
@@ -402,6 +450,8 @@ u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 	
 	for (Sphere* sphere = spheres; sphere != sphere_end; ++sphere)
 	{
+		//aabb_hit(&r, 0.0f, 0.0f);
+
 		if (intersection(&r, *sphere, &temp, t_min, closest))
 		{
 			hit_something = 1;
@@ -541,6 +591,34 @@ v3 colour(Ray r)
 
 					return metal;
 				}
+
+				case CHECKER:
+				{
+					v3 random_unit_vector = random_unit_sphere();
+					v3 point_pos = v3_add(h.point, h.normal);
+					v3 target = v3_add(point_pos, random_unit_vector);
+
+					Ray ray;
+					ray.origin = h.point;
+					ray.direction = v3_sub(target, h.point);
+					ray.bounces = r.bounces + 1;
+
+					v3 c = colour(ray);
+
+					f32 sines = (sin(10.0f*h.point.x) * sin(10.0f*h.point.y) * sin(10.0f*h.point.z) + 1.0f);
+					u8  trunc = sines;
+					v3  check_1		= vec3(0.1f, 0.1f, 0.1f);
+					v3  check_2		= vec3(0.9f, 0.9, 0.9f);
+					v3  check_col	= trunc ? check_1 : check_2;
+					v3	check = v3_mulv(c, check_col);
+
+					return check;
+				}
+
+				case LIGHT:
+				{
+					return  h.material.albedo;
+				}
 			}
 		}
 		else
@@ -554,11 +632,14 @@ v3 colour(Ray r)
 
 		f32 t = 0.5f * (dir_n.y + 1.0f);
 
-		v3 white = vec3(1.0f, 1.0f, 1.0f);
-		v3 blue = vec3(0.5f, 0.7f, 1.0f);
+		//v3 lower = vec3(1.0f, 1.0f, 1.0f);
+		//v3 upper = vec3(0.5f, 0.7f, 1.0f);
 
-		v3 white_component = v3_mulf(white, 1.0f - t);
-		v3 blue_component = v3_mulf(blue, t);
+		v3 lower = vec3(0.175f, 0.175f, 0.175f);
+		v3 upper = vec3(0.02f, 0.02f, 0.02f);
+
+		v3 white_component = v3_mulf(lower, 1.0f-t);
+		v3 blue_component = v3_mulf(upper, t);
 		v3 gradient = v3_add(white_component, blue_component);
 
 		return gradient;
@@ -569,11 +650,11 @@ void setup_pallete(void)
 {
 	palette = malloc(NUM_COLOURS * sizeof(v3));
 
-	palette[0] = vec3(85.0f  / 255.0f, 98.0f  / 255.0f, 112.0f / 255.0f);
-	palette[1] = vec3(78.0f  / 255.0f, 205.0f / 255.0f, 198.0f / 255.0f);
-	palette[2] = vec3(199.0f / 255.0f, 244.0f / 255.0f, 100.0f / 255.0f);
-	palette[3] = vec3(255.0f / 255.0f, 107.0f / 255.0f, 107.0f / 255.0f);
-	palette[4] = vec3(198.0f / 255.0f,  77.0f / 255.0f,  88.0f / 255.0f);
+	palette[0] = vec3(255.0f / 255.0f, 107.0f / 255.0f, 107.0f / 255.0f);
+	palette[1] = vec3(85.0f  / 255.0f, 98.0f  / 255.0f, 112.0f / 255.0f);
+	palette[2] = vec3(78.0f  / 255.0f, 205.0f / 255.0f, 198.0f / 255.0f);
+	palette[3] = vec3(198.0f / 255.0f, 77.0f / 255.0f, 88.0f / 255.0f);
+	palette[4] = vec3(199.0f / 255.0f, 244.0f / 255.0f, 100.0f / 255.0f); 
 
 	return;
 }
@@ -596,21 +677,22 @@ void setup_scene(void)
 	{
 		if (sphere_count == NUM_SPHERES) break;
 
-		spheres[sphere_count].radius = (nrand() * 1.05f) + 0.05f;
-		spheres[sphere_count].position.x = (nrand() * 15.0f) - 7.5f;
+		spheres[sphere_count].radius = (nrand() * 0.4f) + 0.05f;
+		spheres[sphere_count].position.x = (nrand() * 5.0f) - 2.5f;
 		spheres[sphere_count].position.y = spheres[sphere_count].radius;
-		spheres[sphere_count].position.z = (nrand() * 10.0f);
-		spheres[sphere_count].material.type = (nrand() > 0.75f ? METAL : LAMBERT);
+		spheres[sphere_count].position.z = (nrand() * 2.5f);
+		spheres[sphere_count].material.type = (nrand() > 0.75f) ? ((nrand() > 0.65f) ? LIGHT : METAL) : LAMBERT;
+		spheres[sphere_count].material.intensity = nrand();
 
-		f32 brightness = nrand();
+		f32 brightness = 1.0f;
 
 		spheres[sphere_count].material.albedo = spheres[sphere_count].material.type == METAL ? vec3(brightness, brightness, brightness) : get_random_colour_in_pallete();
 		spheres[sphere_count].material.fuzz = nrand() * 0.25;
 
 		int dismiss = 0;
 
-		f32 inner = 03.0f;
-		f32 outer = 10.0f;
+		f32 inner = 0.25f;
+		f32 outer = 4.05f;
 
 		for (int i = 0; i < sphere_count; ++i)
 		{
@@ -631,7 +713,7 @@ void setup_scene(void)
 
 	spheres[0].position = vec3(0.0f, -100000.0f, -0.0f);
 	spheres[0].radius = 100000.0f;
-	spheres[0].material.type = LAMBERT;
+	spheres[0].material.type = CHECKER;
 	spheres[0].material.albedo = vec3(0.5f, 0.5f, 0.5f);
 }
 
@@ -698,9 +780,9 @@ void render_pixel(u32 x, u32 y)
 
 void render(u16 offset, u16 inc)
 {
-	for (s16 y = offset; y < OUTPUT_HEIGHT; y += inc)
+	for (s16 x = 0; x < OUTPUT_WIDTH; x++)
 	{
-		for (s16 x = 0; x < OUTPUT_WIDTH; x++)
+		for (s16 y = offset; y < OUTPUT_HEIGHT; y+= inc)
 		{
 			render_pixel(x, y);
 		}
@@ -734,7 +816,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 {
 	WNDCLASSEX wc;
 	MSG msg;
-
+	srand(SEED);
 	v3 first;
 	first.x = 1.0f;
 	first.y = 1.0f;
