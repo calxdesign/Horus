@@ -1,26 +1,3 @@
-/*H*******************************************************************
-*
-* FILENAME :        Horus.c             
-*
-* DESCRIPTION :
-*       A simple multi-threaded ray/path-tracer in C with 
-*		extremely limited additional vector functions, window 
-*		handling and basic file output. I am under no illusion
-*		about code quality, performance or cleanliness.
-*
-* NOTES :
-*       This is a C implementation based around @Peter_shirley's 
-*		"RayTracing in One Weekend" book (which is brilliant, and
-*		took me a lot longer than a weekend) it's called 'Horus'
-*		cos that's what my pretentious random project-name generator 
-*		decided	to call it.
-*
-* AUTHOR :    David Wilson        START DATE :    December 2018
-*			  @_calx / 
-*			  http://calx.uk
-*
-*H*/
-
 #include <windows.h>
 #include <time.h>
 #include <stdio.h>
@@ -40,30 +17,31 @@ typedef unsigned long long    u64;
 typedef float				  f32;
 typedef double				  f64;
 
-#define MULTITHREADED			
-#define FINISHED_MESSAGE		
-#define OUTPUT					
 
+//WARNING FOCAL DISTANCE HAS EXTRA UNIT
+	
+//#define FINISHED_MESSAGE		
+#define MULTITHREADED		
+#define OUTPUT					
+#define SEED_OVERRIDE			30240
 #define NUM_COLOURS				5
 #define	NUM_SPHERES 			96	
-#define NUM_AA_SAMPLES 			1	
-#define OUTPUT_WIDTH			200
-#define OUTPUT_HEIGHT			100
+#define NUM_AA_SAMPLES 			256	
+#define OUTPUT_WIDTH			2048
+#define OUTPUT_HEIGHT			1024
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
 #define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
 #define V_FOV					50
 #define	RENDER					0
 #define	IDLE					1
-//#define SEED					808
-
 #define MAX_BOUNCES				50
 #define CAM_POS_X				0.00f
 #define CAM_POS_Y				1.10f
-#define CAM_POS_Z			   -1.95f
+#define CAM_POS_Z			   -1.50f
 #define CAM_TARGET_X			0.00f
 #define CAM_TARGET_Y			0.47f
 #define CAM_TARGET_Z			0.00f
-#define CAM_APERTURE			0.20f
+#define CAM_APERTURE			0.15f
 
 typedef enum MaterialType
 {
@@ -172,6 +150,7 @@ static Camera					camera;
 static u8						STATE = RENDER;
 static s32						SEED;
 static char						path[128];
+static u32						render_time;
 
 const char class_name[] = "BerkTracer";
 
@@ -379,6 +358,33 @@ void save_file(void)
 	fwrite(bitmap_image_data, info_header.image_size, 1, file);
 
 	fclose(file);
+
+	char log_filename_and_path[128];
+
+	sprintf(log_filename_and_path, "%s%s%i%s", path, "data_", SEED, ".txt");
+
+	FILE* log;
+
+	log = fopen(log_filename_and_path, "w");
+
+	fprintf(log, "SEED			%i\n\n", SEED);
+	fprintf(log, "NUM_COLOURS		%i\n", NUM_COLOURS);
+	fprintf(log, "NUM_SPHERES:		%i\n", NUM_SPHERES);
+	fprintf(log, "NUM_AA_SAMPLES: 	%i\n", NUM_AA_SAMPLES);
+	fprintf(log, "OUTPUT_WIDTH:		%i\n", OUTPUT_WIDTH);
+	fprintf(log, "OUTPUT_HEIGHT:		%i\n", OUTPUT_HEIGHT);
+	fprintf(log, "ASPECT:			%i\n", ASPECT);
+	fprintf(log, "V_FOV:			%i\n", V_FOV);
+	fprintf(log, "RENDER_TIME:		%i mins\n", render_time);
+	fprintf(log, "MAX_BOUNCES:		%i\n", MAX_BOUNCES);
+	fprintf(log, "CAM_POS_X:		%f\n", CAM_POS_X);
+	fprintf(log, "CAM_POS_Y:		%f\n", CAM_POS_Y);
+	fprintf(log, "CAM_POS_Z:		%f\n", CAM_POS_Z);
+	fprintf(log, "CAM_TARGET_X:		%f\n", CAM_TARGET_X);
+	fprintf(log, "CAM_TARGET_Z:		%f\n", CAM_TARGET_Z);
+	fprintf(log, "CAM_APERTURE:		%f\n", CAM_APERTURE);
+
+	fclose(log);
 }
 
 v3 random_unit_sphere(void)
@@ -717,7 +723,7 @@ void setup_scene(void)
 
 		int dismiss = 0;
 
-		f32 inner = 0.25f;
+		f32 inner = 0.00f;
 		f32 outer = 4.05f;
 
 		for (int i = 0; i < sphere_count; ++i)
@@ -843,9 +849,13 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	WNDCLASSEX wc;
 	MSG msg;
 
+	#ifndef SEED_OVERRIDE
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 	SEED = tm.tm_hour * tm.tm_min * tm.tm_sec;
+	#else
+	SEED = SEED_OVERRIDE;
+	#endif // !SEED_OVERRRIDE
 
 	srand(SEED);
 
@@ -894,7 +904,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	v3 cam_direction = v3_sub(cam_position, cam_target);
 	f32 cam_focal_dist = v3_mag(cam_direction);
 
-	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist);
+	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist + 1.0f);
 
 	setup_pallete();
 	setup_scene();
@@ -947,7 +957,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 				TerminateThread(window_thread, 0);
 
 				cpu_time_used = ((f64)(end - start)) / CLOCKS_PER_SEC;
-
+				render_time = (u32) (cpu_time_used / 60);
 				u8 s[32];
 
 				#ifdef OUTPUT
