@@ -25,10 +25,10 @@ typedef double				  f64;
 #define OUTPUT					
 #define SEED_OVERRIDE			46656
 #define NUM_COLOURS				5
-#define	NUM_SPHERES 			300	
-#define NUM_AA_SAMPLES 			256	
-#define OUTPUT_WIDTH			2048
-#define OUTPUT_HEIGHT			1024
+#define	NUM_SPHERES 			30	
+#define NUM_AA_SAMPLES 			64	
+#define OUTPUT_WIDTH			512
+#define OUTPUT_HEIGHT			256
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
 #define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
 #define V_FOV					50
@@ -37,7 +37,7 @@ typedef double				  f64;
 #define MAX_BOUNCES				50
 #define CAM_POS_X				0.00f
 #define CAM_POS_Y				0.70f
-#define CAM_POS_Z			   -1.250f
+#define CAM_POS_Z			   -1.450f
 #define CAM_TARGET_X			0.00f
 #define CAM_TARGET_Y			0.47f
 #define CAM_TARGET_Z			0.00f
@@ -667,7 +667,7 @@ v3 colour(Ray r)
 		//v3 lower = vec3(1.0f, 1.0f, 1.0f);
 		//v3 upper = vec3(0.5f, 0.7f, 1.0f);
 
-		v3 lower = vec3(0.175f, 0.175f, 0.175f);
+		v3 lower = vec3(0.470f, 0.211f, 0.184f);
 		v3 upper = vec3(0.02f, 0.02f, 0.02f);
 
 		v3 white_component = v3_mulf(lower, 1.0f-t);
@@ -682,11 +682,11 @@ void setup_pallete(void)
 {
 	palette = malloc(NUM_COLOURS * sizeof(v3));
 
-	palette[0] = vec3(255.0f / 255.0f, 107.0f / 255.0f, 107.0f / 255.0f);
-	palette[1] = vec3(85.0f  / 255.0f, 98.0f  / 255.0f, 112.0f / 255.0f);
-	palette[2] = vec3(78.0f  / 255.0f, 205.0f / 255.0f, 198.0f / 255.0f);
-	palette[3] = vec3(198.0f / 255.0f, 77.0f / 255.0f, 88.0f / 255.0f);
-	palette[4] = vec3(199.0f / 255.0f, 244.0f / 255.0f, 100.0f / 255.0f); 
+	*(palette + 0) = vec3(255.0f / 255.0f, 107.0f / 255.0f, 107.0f / 255.0f);
+	*(palette + 1) = vec3(85.0f  / 255.0f, 98.0f  / 255.0f, 112.0f / 255.0f);
+	*(palette + 2) = vec3(78.0f  / 255.0f, 205.0f / 255.0f, 198.0f / 255.0f);
+	*(palette + 3) = vec3(198.0f / 255.0f, 77.0f  / 255.0f, 88.0f  / 255.0f);
+	*(palette + 4) = vec3(199.0f / 255.0f, 244.0f / 255.0f, 100.0f / 255.0f);
 
 	return;
 }
@@ -703,23 +703,28 @@ void setup_scene(void)
 
 	spheres = malloc(NUM_SPHERES * sizeof(Sphere));
 
+	spheres->position = vec3(0.0f, -100000.0f, -0.0f);
+	spheres->radius = 100000.0f;
+	spheres->material.type = LAMBERT;
+	spheres->material.albedo = vec3(0.5f, 0.5f, 0.5f);
+
 	u32 sphere_count = 1;
 
 	while (1)
 	{
 		if (sphere_count == NUM_SPHERES) break;
 
-		spheres[sphere_count].radius = (nrand() * 02.5f) + 0.005f;
-		spheres[sphere_count].position.x = (nrand() * 5.0f) - 2.5f;
-		spheres[sphere_count].position.y = spheres[sphere_count].radius;
-		spheres[sphere_count].position.z = (nrand() * 2.5f);
-		spheres[sphere_count].material.type = (nrand() > 0.75f) ? ((nrand() > 0.65f) ? LIGHT : METAL) : LAMBERT;
-		spheres[sphere_count].material.intensity = nrand();
+		(spheres + sphere_count)->radius = (nrand() * 0.25f) + 0.05f;
+		(spheres + sphere_count)->position.x = (nrand() * 5.0f) - 2.5f;
+		(spheres + sphere_count)->position.y = (spheres + sphere_count)->radius;
+		(spheres + sphere_count)->position.z = (nrand() * 2.5f);
+		(spheres + sphere_count)->material.type = (nrand() > 0.75f) ? ((nrand() > 0.65f) ? LIGHT : METAL) : LAMBERT;
+		(spheres + sphere_count)->material.intensity = nrand();
 
 		f32 brightness = 1.0f;
 
-		spheres[sphere_count].material.albedo = spheres[sphere_count].material.type == METAL ? vec3(brightness, brightness, brightness) : get_random_colour_in_pallete();
-		spheres[sphere_count].material.fuzz = nrand() * 0.25;
+		(spheres + sphere_count)->material.albedo = (spheres + sphere_count)->material.type == METAL ? vec3(brightness, brightness, brightness) : get_random_colour_in_pallete();
+		(spheres + sphere_count)->material.fuzz = nrand() * 0.25;
 
 		int dismiss = 0;
 
@@ -728,12 +733,12 @@ void setup_scene(void)
 
 		for (int i = 0; i < sphere_count; ++i)
 		{
-			v3  dir = v3_sub(spheres[sphere_count].position, spheres[i].position);
+			v3  dir = v3_sub((spheres + sphere_count)->position, (spheres + i)->position);
 			f32 dis = v3_mag(dir);
-			v3  dir_to_sphere = v3_sub(spheres[sphere_count].position, camera.position);
+			v3  dir_to_sphere = v3_sub((spheres + sphere_count)->position, camera.position);
 			f32 distance_to_cam = v3_mag(dir_to_sphere);
 
-			if (dis < (spheres[sphere_count].radius + spheres[i].radius) || distance_to_cam < inner || distance_to_cam > outer)
+			if (dis < ((spheres + sphere_count)->radius + (spheres + i)->radius) || distance_to_cam < inner || distance_to_cam > outer)
 			{
 				dismiss = 1;
 				break;
@@ -742,11 +747,6 @@ void setup_scene(void)
 
 		if (dismiss == 0) sphere_count++;
 	}
-
-	spheres[0].position = vec3(0.0f, -100000.0f, -0.0f);
-	spheres[0].radius = 100000.0f;
-	spheres[0].material.type = LAMBERT;
-	spheres[0].material.albedo = vec3(0.5f, 0.5f, 0.5f);
 }
 
 void setup_bitmap(void)
