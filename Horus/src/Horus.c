@@ -23,9 +23,9 @@ typedef double				  f64;
 //#define FINISHED_MESSAGE		
 #define MULTITHREADED		
 #define OUTPUT					
-#define SEED_OVERRIDE			30240
+#define SEED_OVERRIDE			46656
 #define NUM_COLOURS				5
-#define	NUM_SPHERES 			96	
+#define	NUM_SPHERES 			300	
 #define NUM_AA_SAMPLES 			256	
 #define OUTPUT_WIDTH			2048
 #define OUTPUT_HEIGHT			1024
@@ -36,12 +36,12 @@ typedef double				  f64;
 #define	IDLE					1
 #define MAX_BOUNCES				50
 #define CAM_POS_X				0.00f
-#define CAM_POS_Y				1.10f
-#define CAM_POS_Z			   -1.50f
+#define CAM_POS_Y				0.70f
+#define CAM_POS_Z			   -1.250f
 #define CAM_TARGET_X			0.00f
 #define CAM_TARGET_Y			0.47f
 #define CAM_TARGET_Z			0.00f
-#define CAM_APERTURE			0.15f
+#define CAM_APERTURE			0.05f
 
 typedef enum MaterialType
 {
@@ -709,7 +709,7 @@ void setup_scene(void)
 	{
 		if (sphere_count == NUM_SPHERES) break;
 
-		spheres[sphere_count].radius = (nrand() * 0.4f) + 0.05f;
+		spheres[sphere_count].radius = (nrand() * 02.5f) + 0.005f;
 		spheres[sphere_count].position.x = (nrand() * 5.0f) - 2.5f;
 		spheres[sphere_count].position.y = spheres[sphere_count].radius;
 		spheres[sphere_count].position.z = (nrand() * 2.5f);
@@ -745,7 +745,7 @@ void setup_scene(void)
 
 	spheres[0].position = vec3(0.0f, -100000.0f, -0.0f);
 	spheres[0].radius = 100000.0f;
-	spheres[0].material.type = CHECKER;
+	spheres[0].material.type = LAMBERT;
 	spheres[0].material.albedo = vec3(0.5f, 0.5f, 0.5f);
 }
 
@@ -904,7 +904,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	v3 cam_direction = v3_sub(cam_position, cam_target);
 	f32 cam_focal_dist = v3_mag(cam_direction);
 
-	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist + 1.0f);
+	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist);
 
 	setup_pallete();
 	setup_scene();
