@@ -26,7 +26,7 @@ typedef double				  f64;
 #define SEED_OVERRIDE			46656
 #define NUM_COLOURS				5
 #define	NUM_SPHERES 			30	
-#define NUM_AA_SAMPLES 			64	
+#define NUM_AA_SAMPLES 			1	
 #define OUTPUT_WIDTH			512
 #define OUTPUT_HEIGHT			256
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
@@ -150,7 +150,11 @@ static Camera					camera;
 static u8						STATE = RENDER;
 static s32						SEED;
 static char						path[128];
-static u32						render_time;
+static f64						render_time;
+static Sphere*					l_spheres;
+static Sphere*					r_spheres;
+static u32						left_count;
+static u32						right_count;
 
 const char class_name[] = "BerkTracer";
 
@@ -375,7 +379,7 @@ void save_file(void)
 	fprintf(log, "OUTPUT_HEIGHT:		%i\n", OUTPUT_HEIGHT);
 	fprintf(log, "ASPECT:			%i\n", ASPECT);
 	fprintf(log, "V_FOV:			%i\n", V_FOV);
-	fprintf(log, "RENDER_TIME:		%i mins\n", render_time);
+	fprintf(log, "RENDER_TIME:		%f s\n", render_time);
 	fprintf(log, "MAX_BOUNCES:		%i\n", MAX_BOUNCES);
 	fprintf(log, "CAM_POS_X:		%f\n", CAM_POS_X);
 	fprintf(log, "CAM_POS_Y:		%f\n", CAM_POS_Y);
@@ -479,12 +483,22 @@ u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 	u32		hit_something = 0;
 	f32		closest = t_max;
 
-	Sphere* sphere_end = &spheres[NUM_SPHERES];
-	
-	for (Sphere* sphere = spheres; sphere != sphere_end; ++sphere)
-	{
-		//aabb_hit(&r, 0.0f, 0.0f);
+	Sphere* sphere_start;
+	Sphere* sphere_end;
 
+	if (r.direction.x >= 0.0f)
+	{
+		sphere_start = r_spheres;
+		sphere_end = (r_spheres + right_count);
+	}
+	else
+	{
+		sphere_start = l_spheres;
+		sphere_end = (l_spheres + left_count);
+	}
+	
+	for (Sphere* sphere = sphere_start; sphere != sphere_end; ++sphere)
+	{
 		if (intersection(&r, *sphere, &temp, t_min, closest))
 		{
 			hit_something = 1;
@@ -545,7 +559,6 @@ v3 get_random_colour_in_hue(f32 x, f32 y, f32 z)
 
 	return c;
 }
-
 
 void setup_camera(Camera* camera, v3 pos, v3 target, v3 up, f32 vertical_fov, f32 aspect, f32 aperture, f32 focus_distance)
 {
@@ -698,9 +711,10 @@ v3 get_random_colour_in_pallete(void)
 	return palette[index];
 }
 
+
+
 void setup_scene(void)
 {
-
 	spheres = malloc(NUM_SPHERES * sizeof(Sphere));
 
 	spheres->position = vec3(0.0f, -100000.0f, -0.0f);
@@ -747,6 +761,43 @@ void setup_scene(void)
 
 		if (dismiss == 0) sphere_count++;
 	}
+
+	Sphere* last_sphere = (spheres + NUM_SPHERES);
+	Sphere* left_spheres[NUM_SPHERES];
+	Sphere* right_spheres[NUM_SPHERES];
+
+	for (Sphere* sphere = spheres; sphere != last_sphere; sphere++)
+	{
+		if (sphere->position.x <= 0.0f)
+		{
+			left_spheres[left_count] = sphere;
+			left_count++;
+			
+
+			if (sphere->position.x + sphere->radius > 0.0f)
+			{
+				right_spheres[right_count] = sphere;
+				right_count++;
+			}
+		}
+		else 
+		{ 
+			right_spheres[right_count] = sphere;
+			right_count++;
+
+			if (sphere->position.x - sphere->radius < 0.0f)
+			{
+				left_spheres[left_count] = sphere;
+				left_count++;
+			}
+		}
+	}
+
+	l_spheres = malloc(left_count * sizeof(Sphere));
+	r_spheres = malloc(right_count * sizeof(Sphere));
+
+	for (int l = 0; l < left_count; l++) l_spheres[l] = *left_spheres[l];
+	for (int r = 0; r < right_count; r++) r_spheres[r] = *right_spheres[r];
 }
 
 void setup_bitmap(void)
@@ -905,13 +956,10 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	f32 cam_focal_dist = v3_mag(cam_direction);
 
 	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist);
-
 	setup_pallete();
 	setup_scene();
 	setup_bitmap();
 	
-
-
 	SYSTEM_INFO system_info;
 	GetSystemInfo(&system_info);
 
@@ -956,8 +1004,8 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 				TerminateThread(window_thread, 0);
 
-				cpu_time_used = ((f64)(end - start)) / CLOCKS_PER_SEC;
-				render_time = (u32) (cpu_time_used / 60);
+				cpu_time_used = ((f64) (end - start)) / CLOCKS_PER_SEC;
+				render_time = cpu_time_used;
 				u8 s[32];
 
 				#ifdef OUTPUT
