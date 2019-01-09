@@ -16,9 +16,6 @@ typedef long long             s64;
 typedef unsigned long long    u64;
 typedef float				  f32;
 typedef double				  f64;
-
-
-//WARNING FOCAL DISTANCE HAS EXTRA UNIT
 	
 //#define FINISHED_MESSAGE		
 #define MULTITHREADED		
@@ -42,6 +39,7 @@ typedef double				  f64;
 #define CAM_TARGET_Y			0.47f
 #define CAM_TARGET_Z			0.00f
 #define CAM_APERTURE			0.05f
+#define AABB_COUNT				8
 
 typedef enum MaterialType
 {
@@ -132,8 +130,10 @@ typedef struct Hit
 
 typedef struct AABB 
 {
-	v3 min;
-	v3 max;
+	v3			min;
+	v3			max;
+	u32			member_count;
+	Sphere**	members;
 
 } AABB;
 
@@ -151,15 +151,13 @@ static u8						STATE = RENDER;
 static s32						SEED;
 static char						path[128];
 static f64						render_time;
-static Sphere*					l_spheres;
-static Sphere*					r_spheres;
+static Sphere**					l_spheres;
+static Sphere**					r_spheres;
 static u32						left_count;
 static u32						right_count;
+static AABB*					aabbs;
 
-const char class_name[] = "BerkTracer";
-
-
-
+const char class_name[] = "Horus Path-Tracer";
 
 f32 fract(f32 x)
 {
@@ -479,35 +477,36 @@ u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 
 u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
 {
+	u32		hit_something = 0;	
 	Hit		temp;
-	u32		hit_something = 0;
 	f32		closest = t_max;
+	int		i = 0;
 
-	Sphere* sphere_start;
-	Sphere* sphere_end;
+	AABB*	aabbs_end = (aabbs + AABB_COUNT);
 
-	if (r.direction.x >= 0.0f)
+	for (AABB* aabb = aabbs; aabb != aabbs_end; aabb++)
 	{
-		sphere_start = r_spheres;
-		sphere_end = (r_spheres + right_count);
-	}
-	else
-	{
-		sphere_start = l_spheres;
-		sphere_end = (l_spheres + left_count);
-	}
-	
-	for (Sphere* sphere = sphere_start; sphere != sphere_end; ++sphere)
-	{
-		if (intersection(&r, *sphere, &temp, t_min, closest))
+		u32 hit = aabb_hit(&r, &aabb, 0.0f, FLT_MAX);
+		
+		i++;
+
+		if (hit)
 		{
-			hit_something = 1;
-			closest = temp.t;
+			Sphere* sphere_end = (*aabb->members + aabb->member_count);
 
-			h->t = temp.t;
-			h->point = temp.point;
-			h->normal = temp.normal;
-			h->material = sphere->material;
+			for (Sphere* sphere = *aabb->members; sphere != sphere_end; ++sphere)
+			{
+				if (intersection(&r, *sphere, &temp, t_min, closest))
+				{
+					hit_something = 1;
+					closest = temp.t;
+
+					h->t = temp.t;
+					h->point = temp.point;
+					h->normal = temp.normal;
+					h->material = sphere->material;
+				}
+			}
 		}
 	}
 
@@ -793,11 +792,66 @@ void setup_scene(void)
 		}
 	}
 
-	l_spheres = malloc(left_count * sizeof(Sphere));
-	r_spheres = malloc(right_count * sizeof(Sphere));
+	l_spheres = malloc(left_count * sizeof(Sphere*));
+	r_spheres = malloc(right_count * sizeof(Sphere*));
 
-	for (int l = 0; l < left_count; l++) l_spheres[l] = *left_spheres[l];
-	for (int r = 0; r < right_count; r++) r_spheres[r] = *right_spheres[r];
+	for (int l = 0; l < left_count; l++) l_spheres[l] = left_spheres[l];
+	for (int r = 0; r < right_count; r++) r_spheres[r] = right_spheres[r];
+}
+
+s32 intersects(f32 rect_x, f32 rect_y, f32 rect_width, f32 rect_height, f32 circle_x, f32 circle_y, f32 circle_radius)
+{
+	f32 delta_x = circle_x - max(rect_x, min(circle_x, rect_x + rect_width));
+	f32 delta_y = circle_y - max(rect_y, min(circle_y, rect_y + rect_height));
+
+	return ((delta_x * delta_x + delta_y * delta_y) < (circle_radius * circle_radius)) ? 1 : 0;
+}
+
+void setup_aabb(void)
+{
+	aabbs = malloc(8 * sizeof(AABB));
+	s32 aabb_index = 0;
+
+	for (s32 z = 2; z > -2; z-=2)
+	{
+		for (s32 x = -4; x < 4; x+=2)
+		{
+			(aabbs + aabb_index)->min = vec3((f32) x,       1.0f, (f32) z);
+			(aabbs + aabb_index)->max = vec3((f32) x+2.0f, -1.0f, (f32) z-2.0f);
+
+			aabb_index++;
+		}
+	}
+
+	AABB* aabbs_end = (aabbs + AABB_COUNT);
+	
+	for (AABB* aabb = aabbs; aabb != aabbs_end; aabb++)
+	{
+		Sphere* sphere_end = (spheres + NUM_SPHERES);
+		Sphere* intersected_spheres[NUM_SPHERES];
+
+		aabb->member_count = 0;
+
+		for (Sphere* sphere = spheres; sphere != sphere_end; sphere++)
+		{
+			s32 intersection = intersects(aabb->min.x, aabb->min.z, 2.0f, 2.0f, sphere->position.x, sphere->position.z, sphere->radius);
+
+			if (intersection)
+			{
+				intersected_spheres[aabb->member_count] = sphere;
+				aabb->member_count++;
+			}
+		}
+
+		aabb->members = malloc(aabb->member_count * sizeof(Sphere*));
+
+		for (s32 i = 0; i < aabb->member_count; i++)
+		{
+			*(aabb->members + i) = intersected_spheres[i];
+		}
+	}
+
+	return;
 }
 
 void setup_bitmap(void)
@@ -958,6 +1012,7 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist);
 	setup_pallete();
 	setup_scene();
+	setup_aabb();
 	setup_bitmap();
 	
 	SYSTEM_INFO system_info;
