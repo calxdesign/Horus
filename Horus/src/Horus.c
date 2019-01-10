@@ -86,6 +86,7 @@ typedef struct Ray
 	v3	origin;
 	v3	direction;
 	u32 bounces;
+	u32 id;
 
 } Ray;
 
@@ -134,6 +135,7 @@ typedef struct AABB
 	v3			max;
 	u32			member_count;
 	Sphere**	members;
+	u32			id;
 
 } AABB;
 
@@ -301,6 +303,8 @@ f32 nrand()
 	return ((f32)rand() / ((f32) RAND_MAX));
 }
 
+u32 ray_index = 0;
+
 Ray get_ray(Camera* cam, f32 s, f32 t)
 {
 	v3 lens_ray_offset = vec3(0.0f, 0.0f, 0.0f);
@@ -333,6 +337,10 @@ Ray get_ray(Camera* cam, f32 s, f32 t)
 
 	ray.direction = v3_sub(uv_cam, ray.origin);
 	ray.bounces = 0;
+
+	ray.id = ray_index;
+
+	ray_index++;
 
 	return ray;
 }
@@ -475,43 +483,32 @@ u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 	return 0;
 }
 
-u32 intersects_all(Ray r, Hit* h, float t_min, float t_max)
+
+u32 intersects_all(Ray r, Hit* h, float t_min, float t_max, Sphere* first, s32 count)
 {
-	u32		hit_something = 0;	
 	Hit		temp;
+	u32		hit_something = 0;
 	f32		closest = t_max;
-	int		i = 0;
 
-	AABB*	aabbs_end = (aabbs + AABB_COUNT);
+	Sphere* sphere_end = (first + (count-1));
 
-	for (AABB* aabb = aabbs; aabb != aabbs_end; aabb++)
+	for (Sphere* sphere = first; sphere != sphere_end; sphere++)
 	{
-		u32 hit = aabb_hit(&r, &aabb, 0.0f, FLT_MAX);
-		
-		i++;
-
-		if (hit)
+		if (intersection(&r, *sphere, &temp, t_min, closest))
 		{
-			Sphere* sphere_end = (*aabb->members + aabb->member_count);
+			hit_something = 1;
+			closest = temp.t;
 
-			for (Sphere* sphere = *aabb->members; sphere != sphere_end; ++sphere)
-			{
-				if (intersection(&r, *sphere, &temp, t_min, closest))
-				{
-					hit_something = 1;
-					closest = temp.t;
-
-					h->t = temp.t;
-					h->point = temp.point;
-					h->normal = temp.normal;
-					h->material = sphere->material;
-				}
-			}
+			h->t = temp.t;
+			h->point = temp.point;
+			h->normal = temp.normal;
+			h->material = sphere->material;
 		}
 	}
 
 	return hit_something;
 }
+
 
 void paint(void)
 {
@@ -590,9 +587,30 @@ void setup_camera(Camera* camera, v3 pos, v3 target, v3 up, f32 vertical_fov, f3
 
 v3 colour(Ray r)
 {
+	AABB*	aabbs_end = (aabbs + AABB_COUNT);
+
+	Sphere* current_set = NULL;
+	s32		current_set_count = -1;
+
+	for (AABB* aabb = aabbs; aabb != aabbs_end; aabb++)
+	{
+		u32 hit = aabb_hit(&r, &aabb, 0.0f, FLT_MAX);
+
+		if (hit)
+		{
+			current_set			= *aabb->members;
+			current_set_count	= aabb->member_count;
+
+			u32 box_id = aabb->id;
+			u32 ray_id = aabb->id;
+
+			//break;
+		}
+	}
+
 	Hit h;
 
-	if (intersects_all(r, &h, 0.001f, 50.0f))
+	if (intersects_all(r, &h, 0.001f, FLT_MAX, current_set, current_set_count))
 	{
 		if (r.bounces < MAX_BOUNCES)
 		{
@@ -810,14 +828,15 @@ s32 intersects(f32 rect_x, f32 rect_y, f32 rect_width, f32 rect_height, f32 circ
 void setup_aabb(void)
 {
 	aabbs = malloc(8 * sizeof(AABB));
-	s32 aabb_index = 0;
+	u32 aabb_index = 0;
 
 	for (s32 z = 2; z > -2; z-=2)
 	{
 		for (s32 x = -4; x < 4; x+=2)
 		{
-			(aabbs + aabb_index)->min = vec3((f32) x,       1.0f, (f32) z);
-			(aabbs + aabb_index)->max = vec3((f32) x+2.0f, -1.0f, (f32) z-2.0f);
+			(aabbs + aabb_index)->min = vec3((f32) x,        1.0f, (f32) z);
+			(aabbs + aabb_index)->max = vec3((f32)x + 2.0f, -1.0f, (f32) z - 2.0f);
+			(aabbs + aabb_index)->id = aabb_index;
 
 			aabb_index++;
 		}
