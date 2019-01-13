@@ -20,9 +20,9 @@ typedef double				  f64;
 //#define FINISHED_MESSAGE		
 #define MULTITHREADED		
 #define OUTPUT					
-#define SEED_OVERRIDE			46656
+#define SEED_OVERRIDE			46556
 #define NUM_COLOURS				5
-#define	NUM_SPHERES 			30	
+#define	NUM_SPHERES 			256	
 #define NUM_AA_SAMPLES 			1	
 #define OUTPUT_WIDTH			512
 #define OUTPUT_HEIGHT			256
@@ -39,7 +39,6 @@ typedef double				  f64;
 #define CAM_TARGET_Y			0.47f
 #define CAM_TARGET_Z			0.00f
 #define CAM_APERTURE			0.05f
-#define AABB_COUNT				8
 
 typedef enum MaterialType
 {
@@ -129,16 +128,6 @@ typedef struct Hit
 
 } Hit;
 
-typedef struct AABB 
-{
-	v3			min;
-	v3			max;
-	u32			member_count;
-	Sphere**	members;
-	u32			id;
-
-} AABB;
-
 static HWND						hwnd;
 static Sphere*					spheres;
 static v3*						palette;
@@ -153,11 +142,6 @@ static u8						STATE = RENDER;
 static s32						SEED;
 static char						path[128];
 static f64						render_time;
-static Sphere**					l_spheres;
-static Sphere**					r_spheres;
-static u32						left_count;
-static u32						right_count;
-static AABB*					aabbs;
 
 const char class_name[] = "Horus Path-Tracer";
 
@@ -413,35 +397,6 @@ v3 random_unit_sphere(void)
 	}
 }
 
-u32 aabb_hit(Ray* ray, AABB* aabb, f32 t_min, f32 t_max)
-{
-	f32* ray_direction	= &ray->direction;
-	f32* ray_origin		= &ray->origin;
-	f32* aabb_min		= &aabb->min;
-	f32* aabb_max		= &aabb->max;
-
-	for (u8 axis = 0; axis < 3; axis++)
-	{
-		f32 inv_d	= 1.0f / ray_direction[axis];
-		f32 t_0		= (aabb_min[axis] - ray_origin[axis]) * inv_d;
-		f32 t_1		= (aabb_max[axis] - ray_origin[axis]) * inv_d;
-
-		if (inv_d < 0.0f)
-		{
-			f32 temp	= t_0;
-			f32 t_0		= t_1;
-			f32 t_1		= temp;
-		}
-
-		t_min = t_0 > t_min ? t_0 : t_min;
-		t_max = t_1 > t_max ? t_1 : t_max;
-
-		if (t_max <= t_min) return 0;
-	}
-
-	return 1;
-}
-
 u32 intersection(Ray* r, Sphere s, Hit* h, float t_min, float t_max)
 {
 	v3	i  = v3_sub(r->origin, s.position);
@@ -587,30 +542,9 @@ void setup_camera(Camera* camera, v3 pos, v3 target, v3 up, f32 vertical_fov, f3
 
 v3 colour(Ray r)
 {
-	AABB*	aabbs_end = (aabbs + AABB_COUNT);
-
-	Sphere* current_set = NULL;
-	s32		current_set_count = -1;
-
-	for (AABB* aabb = aabbs; aabb != aabbs_end; aabb++)
-	{
-		u32 hit = aabb_hit(&r, &aabb, 0.0f, FLT_MAX);
-
-		if (hit)
-		{
-			current_set			= *aabb->members;
-			current_set_count	= aabb->member_count;
-
-			u32 box_id = aabb->id;
-			u32 ray_id = aabb->id;
-
-			//break;
-		}
-	}
-
 	Hit h;
 
-	if (intersects_all(r, &h, 0.001f, FLT_MAX, current_set, current_set_count))
+	if (intersects_all(r, &h, 0.001f, FLT_MAX, spheres, NUM_SPHERES))
 	{
 		if (r.bounces < MAX_BOUNCES)
 		{
@@ -728,8 +662,6 @@ v3 get_random_colour_in_pallete(void)
 	return palette[index];
 }
 
-
-
 void setup_scene(void)
 {
 	spheres = malloc(NUM_SPHERES * sizeof(Sphere));
@@ -778,43 +710,6 @@ void setup_scene(void)
 
 		if (dismiss == 0) sphere_count++;
 	}
-
-	Sphere* last_sphere = (spheres + NUM_SPHERES);
-	Sphere* left_spheres[NUM_SPHERES];
-	Sphere* right_spheres[NUM_SPHERES];
-
-	for (Sphere* sphere = spheres; sphere != last_sphere; sphere++)
-	{
-		if (sphere->position.x <= 0.0f)
-		{
-			left_spheres[left_count] = sphere;
-			left_count++;
-			
-
-			if (sphere->position.x + sphere->radius > 0.0f)
-			{
-				right_spheres[right_count] = sphere;
-				right_count++;
-			}
-		}
-		else 
-		{ 
-			right_spheres[right_count] = sphere;
-			right_count++;
-
-			if (sphere->position.x - sphere->radius < 0.0f)
-			{
-				left_spheres[left_count] = sphere;
-				left_count++;
-			}
-		}
-	}
-
-	l_spheres = malloc(left_count * sizeof(Sphere*));
-	r_spheres = malloc(right_count * sizeof(Sphere*));
-
-	for (int l = 0; l < left_count; l++) l_spheres[l] = left_spheres[l];
-	for (int r = 0; r < right_count; r++) r_spheres[r] = right_spheres[r];
 }
 
 s32 intersects(f32 rect_x, f32 rect_y, f32 rect_width, f32 rect_height, f32 circle_x, f32 circle_y, f32 circle_radius)
@@ -823,54 +718,6 @@ s32 intersects(f32 rect_x, f32 rect_y, f32 rect_width, f32 rect_height, f32 circ
 	f32 delta_y = circle_y - max(rect_y, min(circle_y, rect_y + rect_height));
 
 	return ((delta_x * delta_x + delta_y * delta_y) < (circle_radius * circle_radius)) ? 1 : 0;
-}
-
-void setup_aabb(void)
-{
-	aabbs = malloc(8 * sizeof(AABB));
-	u32 aabb_index = 0;
-
-	for (s32 z = 2; z > -2; z-=2)
-	{
-		for (s32 x = -4; x < 4; x+=2)
-		{
-			(aabbs + aabb_index)->min = vec3((f32) x,        1.0f, (f32) z);
-			(aabbs + aabb_index)->max = vec3((f32)x + 2.0f, -1.0f, (f32) z - 2.0f);
-			(aabbs + aabb_index)->id = aabb_index;
-
-			aabb_index++;
-		}
-	}
-
-	AABB* aabbs_end = (aabbs + AABB_COUNT);
-	
-	for (AABB* aabb = aabbs; aabb != aabbs_end; aabb++)
-	{
-		Sphere* sphere_end = (spheres + NUM_SPHERES);
-		Sphere* intersected_spheres[NUM_SPHERES];
-
-		aabb->member_count = 0;
-
-		for (Sphere* sphere = spheres; sphere != sphere_end; sphere++)
-		{
-			s32 intersection = intersects(aabb->min.x, aabb->min.z, 2.0f, 2.0f, sphere->position.x, sphere->position.z, sphere->radius);
-
-			if (intersection)
-			{
-				intersected_spheres[aabb->member_count] = sphere;
-				aabb->member_count++;
-			}
-		}
-
-		aabb->members = malloc(aabb->member_count * sizeof(Sphere*));
-
-		for (s32 i = 0; i < aabb->member_count; i++)
-		{
-			*(aabb->members + i) = intersected_spheres[i];
-		}
-	}
-
-	return;
 }
 
 void setup_bitmap(void)
@@ -983,21 +830,6 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 
 	srand(SEED);
 
-	v3 first;
-	first.x = 1.0f;
-	first.y = 1.0f;
-	first.z = 1.0f;
-
-	v3 second;
-	second.x = 2.0f;
-	second.y = 2.0f;
-	second.z = 2.0f;
-
-	v3 a = v3_add(first, second);
-	v3 b = v3_div(first, 2.0f);
-	v3 c = v3_mulf(first, 0.5f);
-	v3 d = v3_sub(first, second);
-
 	wc.cbSize = sizeof(WNDCLASSEX);
 	wc.style = 0;
 	wc.lpfnWndProc = WndProc;
@@ -1031,7 +863,6 @@ int WINAPI WinMain(HINSTANCE h_instance, HINSTANCE prev_instance, LPSTR cmd_line
 	setup_camera(&camera, cam_position, cam_target, world_up, V_FOV, ASPECT, CAM_APERTURE, cam_focal_dist);
 	setup_pallete();
 	setup_scene();
-	setup_aabb();
 	setup_bitmap();
 	
 	SYSTEM_INFO system_info;
