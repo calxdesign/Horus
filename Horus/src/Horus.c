@@ -23,9 +23,9 @@ typedef double				  f64;
 #define SEED_OVERRIDE			46556
 #define NUM_COLOURS				5
 #define	NUM_SPHERES 			256	
-#define NUM_AA_SAMPLES 			1	
-#define OUTPUT_WIDTH			512
-#define OUTPUT_HEIGHT			256
+#define NUM_AA_SAMPLES 			64	
+#define OUTPUT_WIDTH			1024
+#define OUTPUT_HEIGHT			512
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
 #define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
 #define V_FOV					50
