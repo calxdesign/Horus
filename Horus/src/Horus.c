@@ -18,12 +18,13 @@ typedef float				  f32;
 typedef double				  f64;
 	
 //#define FINISHED_MESSAGE		
+//#define NIGHT
 #define MULTITHREADED		
 #define OUTPUT					
 #define SEED_OVERRIDE			46556
 #define NUM_COLOURS				5
 #define	NUM_SPHERES 			256	
-#define NUM_AA_SAMPLES 			64	
+#define NUM_AA_SAMPLES 			1	
 #define OUTPUT_WIDTH			1024
 #define OUTPUT_HEIGHT			512
 #define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
@@ -601,12 +602,12 @@ v3 colour(Ray r)
 
 					v3 c = colour(ray);
 
-					f32 sines = (sin(10.0f*h.point.x) * sin(10.0f*h.point.y) * sin(10.0f*h.point.z) + 1.0f);
-					u8  trunc = sines;
+					f32 sines		= (sin(10.0f*h.point.x) * sin(10.0f*h.point.y) * sin(10.0f*h.point.z) + 1.0f);
+					u8  trunc		= sines;
 					v3  check_1		= vec3(0.1f, 0.1f, 0.1f);
 					v3  check_2		= vec3(0.9f, 0.9, 0.9f);
 					v3  check_col	= trunc ? check_1 : check_2;
-					v3	check = v3_mulv(c, check_col);
+					v3	check		= v3_mulv(c, check_col);
 
 					return check;
 				}
@@ -628,11 +629,15 @@ v3 colour(Ray r)
 
 		f32 t = 0.5f * (dir_n.y + 1.0f);
 
-		//v3 lower = vec3(1.0f, 1.0f, 1.0f);
-		//v3 upper = vec3(0.5f, 0.7f, 1.0f);
+		v3 lower = vec3(1.0f, 1.0f, 1.0f);
+		v3 upper = vec3(0.5f, 0.7f, 1.0f);
 
-		v3 lower = vec3(0.470f, 0.211f, 0.184f);
-		v3 upper = vec3(0.02f, 0.02f, 0.02f);
+		#ifdef NIGHT
+
+		lower = vec3(0.470f, 0.211f, 0.184f);
+		upper = vec3(0.02f, 0.02f, 0.02f);
+
+		#endif // NIGHT
 
 		v3 white_component = v3_mulf(lower, 1.0f-t);
 		v3 blue_component = v3_mulf(upper, t);
@@ -681,7 +686,7 @@ void setup_scene(void)
 		(spheres + sphere_count)->position.x = (nrand() * 5.0f) - 2.5f;
 		(spheres + sphere_count)->position.y = (spheres + sphere_count)->radius;
 		(spheres + sphere_count)->position.z = (nrand() * 2.5f);
-		(spheres + sphere_count)->material.type = (nrand() > 0.75f) ? ((nrand() > 0.65f) ? LIGHT : METAL) : LAMBERT;
+		(spheres + sphere_count)->material.type = (nrand() > 0.75f) ? ((nrand() > 0.65f) ? LAMBERT : METAL) : LAMBERT;
 		(spheres + sphere_count)->material.intensity = nrand();
 
 		f32 brightness = 1.0f;
