@@ -111,11 +111,11 @@ typedef struct Sphere
 
 typedef struct Camera
 {
-	v3  	bottom_left;
-	v3  	position;
-	v3  	horizontal;
-	v3  	vertical;
-	f32 	lens_radius;
+	v3  		bottom_left;
+	v3  		position;
+	v3  		horizontal;
+	v3  		vertical;
+	f32 		lens_radius;
 	v3 		u;
 	v3 		v;
 	v3 		w;
@@ -138,13 +138,13 @@ static u8*					bitmap_image_data;
 static HBITMAP					bitmap_handle;
 static HDC					device_context;
 static BITMAPINFO				bitmapinfo;
-static BitmapFileHeader					file_header;
-static BitmapInfoHeader					info_header;
-static Camera						camera;
-static u8						STATE = RENDER;
-static s32						SEED;
-static char						path[128];
-static f64						render_time;
+static BitmapFileHeader				file_header;
+static BitmapInfoHeader				info_header;
+static Camera					camera;
+static u8					STATE = RENDER;
+static s32					SEED;
+static char					path[128];
+static f64					render_time;
 
 const char class_name[] = "Horus";
 
