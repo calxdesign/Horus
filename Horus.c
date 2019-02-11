@@ -87,24 +87,24 @@ typedef struct Ray
 {
 	v3	origin;
 	v3	direction;
-	u32 bounces;
-	u32 id;
+	u32 	bounces;
+	u32 	id;
 
 } Ray;
 
 typedef struct Material
 {
 	MaterialType type;
-	v3			 albedo;
-	f32			 intensity;
-	f32			 fuzz;
+	v3		albedo;
+	f32		intensity;
+	f32		fuzz;
 
 } Material;
 
 typedef struct Sphere
 {
-	v3			position;
-	f32			radius;
+	v3		position;
+	f32		radius;
 	Material	material;
 
 } Sphere;
@@ -124,23 +124,23 @@ typedef struct Camera
 
 typedef struct Hit
 {
-	f32			t;
-	v3			point;
-	v3			normal;
+	f32		t;
+	v3		point;
+	v3		normal;
 	Material	material;
 
 } Hit;
 
-static HWND						hwnd;
+static HWND					hwnd;
 static Sphere*					spheres;
-static v3*						palette;
-static u8*						bitmap_image_data;
+static v3*					palette;
+static u8*					bitmap_image_data;
 static HBITMAP					bitmap_handle;
-static HDC						device_context;
+static HDC					device_context;
 static BITMAPINFO				bitmapinfo;
-static BitmapFileHeader			file_header;
-static BitmapInfoHeader			info_header;
-static Camera					camera;
+static BitmapFileHeader					file_header;
+static BitmapInfoHeader					info_header;
+static Camera						camera;
 static u8						STATE = RENDER;
 static s32						SEED;
 static char						path[128];
