@@ -6,9 +6,9 @@
 
 #pragma pack(1)
 
-typedef signed char				s8;
-typedef char					u8;
-typedef short					s16;
+typedef signed char			s8;
+typedef char				u8;
+typedef short				s16;
 typedef unsigned short			u16;
 typedef int						s32;
 typedef unsigned int			u32;
