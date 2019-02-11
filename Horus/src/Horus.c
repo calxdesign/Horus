@@ -11,7 +11,7 @@ typedef char				u8;
 typedef short				s16;
 typedef unsigned short			u16;
 typedef int				s32;
-typedef unsigned int		u32;
+typedef unsigned int			u32;
 typedef long long			s64;
 typedef unsigned long long		u64;
 typedef float				f32;
@@ -27,15 +27,15 @@ typedef double				f64;
 #define NUM_AA_SAMPLES 			128	
 #define OUTPUT_WIDTH			1024
 #define OUTPUT_HEIGHT			512
-#define	OUTPUTSIZE				OUTPUT_WIDTH * OUTPUT_HEIGHT
-#define ASPECT					OUTPUT_WIDTH / OUTPUT_HEIGHT
-#define V_FOV					50
-#define	RENDER					0
-#define	IDLE					1
-#define MAX_BOUNCES				50
-#define CAM_POS_X				0.00f
-#define CAM_POS_Y				0.70f
-#define CAM_POS_Z			   -1.450f
+#define	OUTPUTSIZE			OUTPUT_WIDTH * OUTPUT_HEIGHT
+#define ASPECT				OUTPUT_WIDTH / OUTPUT_HEIGHT
+#define V_FOV				50
+#define	RENDER				0
+#define	IDLE				1
+#define MAX_BOUNCES			50
+#define CAM_POS_X			0.00f
+#define CAM_POS_Y			0.70f
+#define CAM_POS_Z			-1.450f
 #define CAM_TARGET_X			0.00f
 #define CAM_TARGET_Y			0.47f
 #define CAM_TARGET_Z			0.00f
