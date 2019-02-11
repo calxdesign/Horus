@@ -146,7 +146,7 @@ static s32						SEED;
 static char						path[128];
 static f64						render_time;
 
-const char class_name[] = "Horus Path-Tracer";
+const char class_name[] = "Horus";
 
 f32 fract(f32 x)
 {
