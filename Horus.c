@@ -111,14 +111,14 @@ typedef struct Sphere
 
 typedef struct Camera
 {
-	v3  bottom_left;
-	v3  position;
-	v3  horizontal;
-	v3  vertical;
-	f32 lens_radius;
-	v3 u;
-	v3 v;
-	v3 w;
+	v3  	bottom_left;
+	v3  	position;
+	v3  	horizontal;
+	v3  	vertical;
+	f32 	lens_radius;
+	v3 		u;
+	v3 		v;
+	v3 		w;
 
 } Camera;
 
