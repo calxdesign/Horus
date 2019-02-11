@@ -22,7 +22,7 @@ typedef double				f64;
 #define MULTITHREADED		
 #define OUTPUT					
 #define SEED_OVERRIDE			46557
-#define NUM_COLOURS				5
+#define NUM_COLOURS			5
 #define	NUM_SPHERES 			128	
 #define NUM_AA_SAMPLES 			128	
 #define OUTPUT_WIDTH			1024
