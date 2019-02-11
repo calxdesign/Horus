@@ -367,7 +367,7 @@ void save_file(void)
 	fprintf(log, "SEED			%i\n\n", SEED);
 	fprintf(log, "NUM_COLOURS		%i\n", NUM_COLOURS);
 	fprintf(log, "NUM_SPHERES:		%i\n", NUM_SPHERES);
-	fprintf(log, "NUM_AA_SAMPLES: 	%i\n", NUM_AA_SAMPLES);
+	fprintf(log, "NUM_AA_SAMPLES: 		%i\n", NUM_AA_SAMPLES);
 	fprintf(log, "OUTPUT_WIDTH:		%i\n", OUTPUT_WIDTH);
 	fprintf(log, "OUTPUT_HEIGHT:		%i\n", OUTPUT_HEIGHT);
 	fprintf(log, "ASPECT:			%i\n", ASPECT);
